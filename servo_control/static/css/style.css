@@ -1,0 +1,967 @@
+/* ================================================================
+   樹梅派伺服馬達控制系統 - 工業風格 CSS
+   Industrial Dark Theme - Matching PPT UI Design
+   ================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* ── CSS 變數 ── */
+:root {
+  --bg-dark:      #0a0e1a;
+  --bg-panel:     #111827;
+  --bg-card:      #1a2235;
+  --bg-card2:     #1e293b;
+  --border:       #2a3a55;
+  --border-glow:  #3b82f6;
+  --text-primary: #e2e8f0;
+  --text-sec:     #94a3b8;
+  --text-dim:     #475569;
+  --accent-blue:  #3b82f6;
+  --accent-cyan:  #06b6d4;
+  --accent-green: #10b981;
+  --accent-amber: #f59e0b;
+  --accent-red:   #ef4444;
+  --accent-purple:#8b5cf6;
+  --btn-metal:    linear-gradient(145deg, #374151, #1f2937);
+  --shadow-glow:  0 0 20px rgba(59,130,246,0.25);
+  --shadow-card:  0 4px 24px rgba(0,0,0,0.4);
+  --radius:       12px;
+  --radius-sm:    8px;
+}
+
+/* ── 全域重置 ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-image:
+    radial-gradient(ellipse at 20% 10%, rgba(59,130,246,0.08) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 90%, rgba(6,182,212,0.06) 0%, transparent 60%);
+}
+
+/* ── 掃描線動畫（工業感） ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.05) 2px,
+    rgba(0,0,0,0.05) 4px
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── 頂部導航 ── */
+.navbar {
+  background: rgba(17,24,39,0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.navbar-logo {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.navbar-title {
+  font-family: 'Orbitron', monospace;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  letter-spacing: 1px;
+}
+
+.navbar-subtitle {
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.navbar-status {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-sec);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-red);
+  animation: blink 1.5s ease-in-out infinite;
+}
+.status-dot.online { background: var(--accent-green); animation: pulse-green 2s ease-in-out infinite; }
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+@keyframes pulse-green {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.6); }
+  50% { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+}
+
+.time-display {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--accent-cyan);
+}
+
+/* ── Tab 導航 ── */
+.tab-nav {
+  display: flex;
+  gap: 4px;
+  padding: 16px 24px 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.tab-btn {
+  padding: 10px 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tab-btn:hover { color: var(--text-primary); background: rgba(59,130,246,0.08); }
+.tab-btn.active {
+  color: var(--accent-blue);
+  border-bottom-color: var(--accent-blue);
+  background: rgba(59,130,246,0.1);
+}
+
+/* ── 主容器 ── */
+.main-container {
+  padding: 20px 24px;
+  max-width: 1600px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ── 網格佈局 ── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.grid-auto { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+
+/* ── 卡片 ── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow-card);
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent-blue), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.card:hover::before { opacity: 1; }
+
+.card-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title .icon {
+  width: 20px;
+  height: 20px;
+  background: rgba(59,130,246,0.15);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+
+/* ── PPT 風格：START / STOP 金屬按鈕 ── */
+.control-panel-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 60px;
+  margin-bottom: 32px;
+  padding: 24px;
+  background: var(--bg-card2);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.metal-btn-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.metal-btn-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-sec);
+  letter-spacing: 1px;
+}
+
+/* 金屬質感按鈕 */
+.metal-btn {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.metal-btn-start {
+  background: radial-gradient(circle at 35% 35%, #4a5568, #2d3748 50%, #1a202c);
+  box-shadow:
+    0 6px 20px rgba(0,0,0,0.5),
+    inset 0 2px 4px rgba(255,255,255,0.1),
+    inset 0 -2px 4px rgba(0,0,0,0.4),
+    0 0 0 4px #374151,
+    0 0 0 6px #2d3748;
+}
+
+.metal-btn-start:hover {
+  box-shadow:
+    0 6px 20px rgba(16,185,129,0.3),
+    inset 0 2px 4px rgba(255,255,255,0.1),
+    inset 0 -2px 4px rgba(0,0,0,0.4),
+    0 0 0 4px #374151,
+    0 0 0 6px #2d3748,
+    0 0 30px rgba(16,185,129,0.2);
+}
+
+.metal-btn-start.active {
+  background: radial-gradient(circle at 35% 35%, #34d399, #059669 50%, #047857);
+  box-shadow:
+    0 6px 20px rgba(16,185,129,0.4),
+    inset 0 2px 4px rgba(255,255,255,0.2),
+    inset 0 -2px 4px rgba(0,0,0,0.3),
+    0 0 0 4px #065f46,
+    0 0 0 6px #064e3b,
+    0 0 40px rgba(16,185,129,0.3);
+}
+
+.metal-btn-stop {
+  background: radial-gradient(circle at 35% 35%, #4a5568, #2d3748 50%, #1a202c);
+  box-shadow:
+    0 6px 20px rgba(0,0,0,0.5),
+    inset 0 2px 4px rgba(255,255,255,0.1),
+    inset 0 -2px 4px rgba(0,0,0,0.4),
+    0 0 0 4px #374151,
+    0 0 0 6px #2d3748;
+}
+
+.metal-btn-stop:hover {
+  box-shadow:
+    0 6px 20px rgba(239,68,68,0.3),
+    inset 0 2px 4px rgba(255,255,255,0.1),
+    inset 0 -2px 4px rgba(0,0,0,0.4),
+    0 0 0 4px #374151,
+    0 0 0 6px #2d3748;
+}
+
+.metal-btn-stop.active {
+  background: radial-gradient(circle at 35% 35%, #f87171, #dc2626 50%, #991b1b);
+  box-shadow:
+    0 6px 20px rgba(239,68,68,0.4),
+    inset 0 2px 4px rgba(255,255,255,0.2),
+    inset 0 -2px 4px rgba(0,0,0,0.3),
+    0 0 0 4px #7f1d1d,
+    0 0 0 6px #6b0000,
+    0 0 40px rgba(239,68,68,0.3);
+}
+
+.metal-btn:active { transform: scale(0.95); }
+
+.metal-btn-icon {
+  font-size: 28px;
+  color: rgba(255,255,255,0.7);
+  pointer-events: none;
+}
+
+/* ── PPT 風格：狀態指示燈 ── */
+.indicator-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.indicator-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.indicator-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-sec);
+  letter-spacing: 0.5px;
+}
+
+/* 圓形指示燈 */
+.indicator-lamp {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  position: relative;
+  cursor: default;
+  transition: all 0.3s ease;
+}
+
+.indicator-lamp.off {
+  background: radial-gradient(circle at 35% 35%, #374151, #1f2937 60%, #111827);
+  box-shadow:
+    0 4px 12px rgba(0,0,0,0.5),
+    inset 0 2px 4px rgba(255,255,255,0.05),
+    inset 0 -2px 4px rgba(0,0,0,0.4),
+    0 0 0 3px #2d3748,
+    0 0 0 5px #1f2937;
+}
+
+.indicator-lamp.amber {
+  background: radial-gradient(circle at 35% 35%, #fcd34d, #f59e0b 50%, #d97706);
+  box-shadow:
+    0 4px 12px rgba(245,158,11,0.5),
+    inset 0 2px 4px rgba(255,255,255,0.3),
+    inset 0 -2px 4px rgba(0,0,0,0.2),
+    0 0 0 3px #92400e,
+    0 0 0 5px #78350f,
+    0 0 30px rgba(245,158,11,0.4);
+  animation: lamp-pulse-amber 1.5s ease-in-out infinite;
+}
+
+.indicator-lamp.green {
+  background: radial-gradient(circle at 35% 35%, #6ee7b7, #10b981 50%, #059669);
+  box-shadow:
+    0 4px 12px rgba(16,185,129,0.5),
+    inset 0 2px 4px rgba(255,255,255,0.3),
+    inset 0 -2px 4px rgba(0,0,0,0.2),
+    0 0 0 3px #065f46,
+    0 0 0 5px #064e3b,
+    0 0 30px rgba(16,185,129,0.4);
+}
+
+.indicator-lamp.red {
+  background: radial-gradient(circle at 35% 35%, #fca5a5, #ef4444 50%, #dc2626);
+  box-shadow:
+    0 4px 12px rgba(239,68,68,0.5),
+    inset 0 2px 4px rgba(255,255,255,0.3),
+    inset 0 -2px 4px rgba(0,0,0,0.2),
+    0 0 0 3px #7f1d1d,
+    0 0 0 5px #6b0000,
+    0 0 30px rgba(239,68,68,0.4);
+    animation: lamp-pulse-red 0.8s ease-in-out infinite;
+}
+
+@keyframes lamp-pulse-amber {
+  0%, 100% { box-shadow: 0 4px 12px rgba(245,158,11,0.5), inset 0 2px 4px rgba(255,255,255,0.3), 0 0 0 3px #92400e, 0 0 0 5px #78350f, 0 0 30px rgba(245,158,11,0.4); }
+  50% { box-shadow: 0 4px 12px rgba(245,158,11,0.7), inset 0 2px 4px rgba(255,255,255,0.3), 0 0 0 3px #92400e, 0 0 0 5px #78350f, 0 0 50px rgba(245,158,11,0.6); }
+}
+
+@keyframes lamp-pulse-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* ── PPT 風格：X 軸位置滑桿 ── */
+.position-bar-section {
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.position-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.position-bar-labels {
+  display: flex;
+  justify-content: space-between;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-sec);
+  margin-bottom: 8px;
+}
+
+/* 工業感進度槽 */
+.position-track {
+  height: 32px;
+  background: linear-gradient(180deg, #0d1117, #1a2235);
+  border: 1px solid #2a3a55;
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
+}
+
+.position-track-inner {
+  height: 100%;
+  background: linear-gradient(90deg, #0f4c8a, #1a6bb5, #2196f3, #42a5f5);
+  border-radius: 3px;
+  position: relative;
+  transition: width 0.1s ease;
+  box-shadow: 0 0 12px rgba(59,130,246,0.4);
+}
+
+.position-track-inner::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  right: 4px;
+  height: 4px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.3), transparent);
+  border-radius: 2px;
+}
+
+.position-tick {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.position-tick-line {
+  width: 1px;
+  height: 8px;
+  background: rgba(255,255,255,0.15);
+}
+
+.position-value-display {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  text-align: center;
+  text-shadow: 0 0 20px rgba(6,182,212,0.5);
+}
+
+/* ── 控制按鈕 ── */
+.btn {
+  padding: 10px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card2);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn:hover { background: var(--bg-card); border-color: var(--accent-blue); color: var(--accent-blue); }
+.btn:active { transform: scale(0.97); }
+
+.btn-primary {
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  border-color: #3b82f6;
+  color: white;
+}
+.btn-primary:hover { background: linear-gradient(135deg, #2563eb, #3b82f6); box-shadow: 0 0 20px rgba(59,130,246,0.3); color: white; }
+
+.btn-success {
+  background: linear-gradient(135deg, #065f46, #059669);
+  border-color: #10b981;
+  color: white;
+}
+.btn-success:hover { background: linear-gradient(135deg, #059669, #10b981); box-shadow: 0 0 20px rgba(16,185,129,0.3); color: white; }
+
+.btn-danger {
+  background: linear-gradient(135deg, #7f1d1d, #dc2626);
+  border-color: #ef4444;
+  color: white;
+}
+.btn-danger:hover { background: linear-gradient(135deg, #dc2626, #ef4444); box-shadow: 0 0 20px rgba(239,68,68,0.3); color: white; }
+
+.btn-warning {
+  background: linear-gradient(135deg, #78350f, #d97706);
+  border-color: #f59e0b;
+  color: white;
+}
+.btn-warning:hover { background: linear-gradient(135deg, #d97706, #f59e0b); box-shadow: 0 0 20px rgba(245,158,11,0.3); color: white; }
+
+.btn-amber-toggle {
+  background: radial-gradient(circle at 35% 35%, #374151, #1f2937 60%, #111827);
+  border: 2px solid #374151;
+  border-radius: 50%;
+  width: 56px;
+  height: 56px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4), inset 0 2px 4px rgba(255,255,255,0.05);
+}
+
+.btn-amber-toggle.on {
+  background: radial-gradient(circle at 35% 35%, #fcd34d, #f59e0b 50%, #d97706);
+  border-color: #92400e;
+  box-shadow: 0 4px 12px rgba(245,158,11,0.4), 0 0 24px rgba(245,158,11,0.3);
+}
+.btn-amber-toggle:active { transform: scale(0.93); }
+
+/* ── 步進控制 ── */
+.step-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.step-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card2);
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-btn:hover { background: rgba(59,130,246,0.15); border-color: var(--accent-blue); color: var(--accent-blue); }
+.step-btn:active { transform: scale(0.9); }
+.step-btn.large { width: 56px; height: 56px; font-size: 24px; border-radius: 10px; }
+
+/* ── 數值顯示 ── */
+.value-display {
+  font-family: 'JetBrains Mono', monospace;
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 16px;
+  color: var(--accent-cyan);
+  font-size: 16px;
+  font-weight: 600;
+  min-width: 100px;
+  text-align: center;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.4);
+}
+
+/* ── 輸入框 ── */
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #06b6d4);
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(59,130,246,0.5);
+  border: 2px solid rgba(255,255,255,0.2);
+  transition: all 0.2s;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 16px rgba(59,130,246,0.7);
+  transform: scale(1.15);
+}
+
+input[type="number"], input[type="text"] {
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  padding: 8px 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+input[type="number"]:focus, input[type="text"]:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+}
+
+/* ── PWM 波形 Canvas ── */
+.waveform-canvas {
+  width: 100%;
+  height: 140px;
+  background: #060a10;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: block;
+}
+
+/* ── 診斷表格 ── */
+.diag-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.diag-table th {
+  text-align: left;
+  padding: 8px 12px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border-bottom: 1px solid var(--border);
+}
+
+.diag-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(42,58,85,0.5);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-sec);
+}
+
+.diag-table tr:hover td { background: rgba(59,130,246,0.05); color: var(--text-primary); }
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.tag-green  { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3); }
+.tag-red    { background: rgba(239,68,68,0.15);  color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+.tag-blue   { background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); }
+.tag-amber  { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid rgba(245,158,11,0.3); }
+.tag-purple { background: rgba(139,92,246,0.15); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.3); }
+
+/* ── 量規儀表 ── */
+.gauge-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+canvas.gauge { display: block; }
+
+/* ── 日誌區域 ── */
+.log-panel {
+  background: #060a10;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  height: 180px;
+  overflow-y: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.log-panel::-webkit-scrollbar { width: 4px; }
+.log-panel::-webkit-scrollbar-track { background: transparent; }
+.log-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.log-line { padding: 1px 0; }
+.log-time { color: var(--text-dim); }
+.log-info  { color: var(--accent-cyan); }
+.log-warn  { color: var(--accent-amber); }
+.log-error { color: var(--accent-red); }
+.log-success { color: var(--accent-green); }
+
+/* ── 通知 Toast ── */
+.toast-container {
+  position: fixed;
+  top: 72px;
+  right: 20px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: var(--shadow-glow);
+  animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s;
+  backdrop-filter: blur(8px);
+}
+
+.toast-success { background: rgba(6,78,59,0.9); border: 1px solid #059669; color: #6ee7b7; }
+.toast-error   { background: rgba(127,29,29,0.9); border: 1px solid #dc2626; color: #fca5a5; }
+.toast-info    { background: rgba(30,58,138,0.9); border: 1px solid #3b82f6; color: #93c5fd; }
+
+@keyframes slideIn {
+  from { transform: translateX(100px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; pointer-events: none; }
+}
+
+/* ── 錯誤橫幅 ── */
+.error-banner {
+  background: rgba(127,29,29,0.8);
+  border: 1px solid #ef4444;
+  border-radius: 8px;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #fca5a5;
+  font-size: 13px;
+  margin-bottom: 16px;
+  display: none;
+}
+
+.error-banner.visible { display: flex; }
+
+/* ── GPIO 引腳圖 ── */
+.pin-map {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.pin-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #0d1117;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.pin-number {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--accent-blue);
+  font-weight: 700;
+  min-width: 40px;
+}
+
+.pin-name {
+  font-size: 12px;
+  color: var(--text-sec);
+}
+
+.pin-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-left: auto;
+}
+
+/* ── 響應式 ── */
+@media (max-width: 1024px) {
+  .grid-3 { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 768px) {
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .control-panel-top { flex-wrap: wrap; gap: 24px; }
+  .indicator-row { gap: 20px; }
+  .navbar-title { font-size: 12px; }
+}
+
+/* ── 動畫效果 ── */
+.fade-in { animation: fadeIn 0.4s ease; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── 系統關閉遮罩 ── */
+.system-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s;
+}
+
+.system-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.system-overlay-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 40px;
+  text-align: center;
+  box-shadow: 0 0 80px rgba(0,0,0,0.5);
+}
+
+.system-overlay-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  display: block;
+}
+
+/* ── 步進值選擇 ── */
+.step-selector {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.step-chip {
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.step-chip:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+.step-chip.active { background: rgba(59,130,246,0.15); border-color: var(--accent-blue); color: var(--accent-cyan); }
+
+/* ── 分隔線 ── */
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+  margin: 16px 0;
+}
+
+/* ── 懸停彩色光效 ── */
+.glow-blue  { transition: box-shadow 0.3s; }
+.glow-blue:hover  { box-shadow: 0 0 20px rgba(59,130,246,0.3); }
+.glow-green { transition: box-shadow 0.3s; }
+.glow-green:hover { box-shadow: 0 0 20px rgba(16,185,129,0.3); }
+
+/* ── Section 標題 ── */
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title::before {
+  content: '';
+  display: block;
+  width: 3px;
+  height: 16px;
+  background: var(--accent-blue);
+  border-radius: 2px;
+}

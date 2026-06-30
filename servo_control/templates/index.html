@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="樹梅派伺服馬達控制系統 - 即時監控與控制 X/Y 軸伺服馬達">
+  <title>伺服馬達控制系統 | Servo Motor Controller</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ── 導航欄 ── -->
+<nav class="navbar">
+  <div class="navbar-brand">
+    <div class="navbar-logo">⚙️</div>
+    <div>
+      <div class="navbar-title">SERVO CONTROLLER</div>
+      <div class="navbar-subtitle">Raspberry Pi Motor Control System</div>
+    </div>
+  </div>
+  <div class="navbar-status">
+    <div class="status-badge">
+      <div class="status-dot" id="wsStatusDot"></div>
+      <span id="wsStatusText">連線中...</span>
+    </div>
+    <div class="status-badge">
+      <span>🖥️</span>
+      <span id="gpioModeText">-</span>
+    </div>
+    <div class="time-display" id="clockDisplay">--:--:--</div>
+  </div>
+</nav>
+
+<!-- ── Tab 導航 ── -->
+<div class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('control')" id="tab-control">
+    🎮 控制面板
+  </button>
+  <button class="tab-btn" onclick="switchTab('monitor')" id="tab-monitor">
+    📊 即時監控
+  </button>
+  <button class="tab-btn" onclick="switchTab('signal')" id="tab-signal">
+    📡 訊號檢測
+  </button>
+  <button class="tab-btn" onclick="switchTab('settings')" id="tab-settings">
+    ⚙️ 範圍設定
+  </button>
+  <button class="tab-btn" onclick="switchTab('diagnose')" id="tab-diagnose">
+    🔬 馬達診斷
+  </button>
+</div>
+
+<!-- ── Toast 通知 ── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ── 主容器 ── -->
+<div class="main-container">
+
+  <!-- ═══════════════════════════════════════════
+       TAB 1: 控制面板（仿照 PPT UI）
+  ═══════════════════════════════════════════ -->
+  <div class="tab-content active fade-in" id="tab-content-control">
+
+    <!-- 錯誤橫幅 -->
+    <div class="error-banner" id="errorBanner">
+      <span>⚠️</span>
+      <span id="errorMsg">系統錯誤</span>
+      <button class="btn btn-danger" style="margin-left:auto;padding:4px 12px;font-size:11px" onclick="clearError()">清除</button>
+    </div>
+
+    <!-- START / STOP 金屬按鈕（仿照 PPT） -->
+    <div class="control-panel-top">
+      <div class="metal-btn-group">
+        <div class="metal-btn-label">START_PB</div>
+        <button class="metal-btn metal-btn-start" id="btnStart" onclick="cmdStart()" title="啟動系統">
+          <span class="metal-btn-icon">⏻</span>
+        </button>
+      </div>
+
+      <!-- 系統狀態顯示 -->
+      <div style="text-align:center">
+        <div style="font-family:'Orbitron',monospace;font-size:13px;color:var(--text-dim);margin-bottom:8px">SYSTEM STATUS</div>
+        <div id="systemStatusText" style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:var(--accent-red)">■ STOPPED</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:6px" id="systemTimestamp">--:--:--</div>
+      </div>
+
+      <div class="metal-btn-group">
+        <div class="metal-btn-label">STOP_PB</div>
+        <button class="metal-btn metal-btn-stop active" id="btnStop" onclick="cmdStop()" title="停止系統">
+          <span class="metal-btn-icon">⏹</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 狀態指示燈列（仿照 PPT）-->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title"><span class="icon">💡</span>作業狀態顯示</div>
+      <div class="indicator-row">
+        <div class="indicator-group">
+          <div class="indicator-label">Start Pickup</div>
+          <div class="indicator-lamp off" id="lamp-pickup"></div>
+        </div>
+        <div class="indicator-group">
+          <div class="indicator-label">Arm Down</div>
+          <div class="indicator-lamp off" id="lamp-armdown"></div>
+        </div>
+        <div class="indicator-group">
+          <div class="indicator-label">Vacuum</div>
+          <div class="indicator-lamp off" id="lamp-vacuum"></div>
+        </div>
+        <div class="indicator-group">
+          <div class="indicator-label">Lim LEFT</div>
+          <div class="indicator-lamp off" id="lamp-limleft"></div>
+        </div>
+        <div class="indicator-group">
+          <div class="indicator-label">Lim RIGHT</div>
+          <div class="indicator-lamp off" id="lamp-limright"></div>
+        </div>
+        <div class="indicator-group">
+          <div class="indicator-label">Error</div>
+          <div class="indicator-lamp off" id="lamp-error"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- X 軸位置條（仿照 PPT）-->
+    <div class="position-bar-section">
+      <div class="position-bar-header">
+        <span class="section-title">X 軸位置</span>
+        <div class="position-value-display" id="xPctDisplay">50.0%</div>
+      </div>
+      <div class="position-bar-labels">
+        <span>LEFT</span>
+        <span>IDLE</span>
+        <span>RIGHT</span>
+      </div>
+      <div class="position-track" id="xTrack">
+        <div class="position-track-inner" id="xBar" style="width:50%"></div>
+        <!-- 刻度 -->
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;justify-content:space-between;padding:0 2px;align-items:flex-end;pointer-events:none">
+          <div class="position-tick-line"></div>
+          <div class="position-tick-line"></div>
+          <div class="position-tick-line"></div>
+          <div class="position-tick-line"></div>
+          <div class="position-tick-line"></div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:4px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim)">
+        <span>0.0</span><span>20.0</span><span>40.0</span><span>60.0</span><span>80.0</span><span>100.0</span>
+      </div>
+      <!-- 可拖曳滑桿 -->
+      <div style="margin-top:12px">
+        <input type="range" id="xSlider" min="0" max="100" value="50" step="0.1"
+          oninput="onXSlider(this.value)" style="width:100%">
+      </div>
+    </div>
+
+    <!-- Y 軸位置條 -->
+    <div class="position-bar-section">
+      <div class="position-bar-header">
+        <span class="section-title">Y 軸位置</span>
+        <div class="position-value-display" id="yPctDisplay">50.0%</div>
+      </div>
+      <div class="position-bar-labels">
+        <span>DOWN</span>
+        <span>MIDDLE</span>
+        <span>UP</span>
+      </div>
+      <div class="position-track">
+        <div class="position-track-inner" id="yBar" style="width:50%;background:linear-gradient(90deg,#065f46,#059669,#10b981)"></div>
+      </div>
+      <div style="margin-top:12px">
+        <input type="range" id="ySlider" min="0" max="100" value="50" step="0.1"
+          oninput="onYSlider(this.value)" style="width:100%">
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:16px">
+      <!-- X 軸控制 -->
+      <div class="card">
+        <div class="card-title"><span class="icon">↔️</span>X 軸控制（左右）</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <button class="step-btn large" id="xLeftBtn" onclick="moveAxis('x',-1)" title="左移">◀</button>
+          <div style="text-align:center">
+            <div class="value-display" id="xPulseDisplay">1500 µs</div>
+            <div style="font-size:10px;color:var(--text-dim);margin-top:4px">Pulse Width</div>
+          </div>
+          <button class="step-btn large" id="xRightBtn" onclick="moveAxis('x',1)" title="右移">▶</button>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+          <span style="font-size:12px;color:var(--text-dim)">步進值 (µs):</span>
+          <div class="step-selector">
+            <button class="step-chip" onclick="setStep(10)">10</button>
+            <button class="step-chip active" onclick="setStep(50)">50</button>
+            <button class="step-chip" onclick="setStep(100)">100</button>
+            <button class="step-chip" onclick="setStep(200)">200</button>
+          </div>
+        </div>
+        <div class="divider"></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" style="flex:1" onclick="cmdHome('x')">🏠 X 歸零</button>
+        </div>
+      </div>
+
+      <!-- Y 軸控制 -->
+      <div class="card">
+        <div class="card-title"><span class="icon">↕️</span>Y 軸控制（上下）</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div style="text-align:center">
+            <div class="value-display" id="y1PulseDisplay">1500 µs</div>
+            <div style="font-size:10px;color:var(--text-dim);margin-top:4px">Y1 Motor</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <button class="step-btn large" onclick="moveAxis('y',1)" title="上移">▲</button>
+            <button class="step-btn large" onclick="moveAxis('y',-1)" title="下移">▼</button>
+          </div>
+          <div style="text-align:center">
+            <div class="value-display" id="y2PulseDisplay">1500 µs</div>
+            <div style="font-size:10px;color:var(--text-dim);margin-top:4px">Y2 Motor</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <label style="font-size:12px;color:var(--text-dim)">Y 軸同步:</label>
+          <input type="checkbox" id="ySyncCheck" checked onchange="setYSync(this.checked)">
+          <span id="ySyncLabel" style="font-size:11px;color:var(--accent-green)">ON</span>
+        </div>
+        <div class="divider"></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" style="flex:1" onclick="cmdHome('y')">🏠 Y 歸零</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 動作控制 -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-title"><span class="icon">🤖</span>動作控制</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+
+        <!-- Z_DOWN 手臂控制 -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+          <span style="font-size:12px;color:var(--text-dim)">Arm Down</span>
+          <button class="btn-amber-toggle" id="btnZDown" onclick="toggleZDown()" title="手臂上下"></button>
+        </div>
+
+        <!-- 吸盤控制 -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+          <span style="font-size:12px;color:var(--text-dim)">Vacuum</span>
+          <button class="btn-amber-toggle" id="btnVacuum" onclick="toggleVacuum()" title="吸盤開關"></button>
+        </div>
+
+        <div class="divider" style="width:1px;height:60px;margin:0 8px"></div>
+
+        <!-- 自動取件 -->
+        <button class="btn btn-success" style="padding:14px 24px;font-size:14px" onclick="cmdPickup()" id="btnPickup">
+          🔄 自動取件流程
+        </button>
+
+        <!-- 全部歸零 -->
+        <button class="btn btn-warning" style="padding:14px 24px;font-size:14px" onclick="cmdHome('all')">
+          🏠 全部歸零
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       TAB 2: 即時監控
+  ═══════════════════════════════════════════ -->
+  <div class="tab-content fade-in" id="tab-content-monitor">
+    <div class="grid-3" style="margin-bottom:16px">
+
+      <!-- X 軸量規 -->
+      <div class="card">
+        <div class="card-title"><span class="icon">↔️</span>X 軸馬達</div>
+        <div class="gauge-container">
+          <canvas class="gauge" id="gaugeX" width="180" height="180"></canvas>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--accent-cyan)" id="gaugeXVal">1500 µs</div>
+          <div style="font-size:11px;color:var(--text-dim)">GPIO <span id="pinX">12</span> | PWM 50Hz</div>
+          <div class="tag tag-blue" id="tagX">IDLE</div>
+        </div>
+      </div>
+
+      <!-- Y1 軸量規 -->
+      <div class="card">
+        <div class="card-title"><span class="icon">↕️</span>Y1 軸馬達</div>
+        <div class="gauge-container">
+          <canvas class="gauge" id="gaugeY1" width="180" height="180"></canvas>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--accent-green)" id="gaugeY1Val">1500 µs</div>
+          <div style="font-size:11px;color:var(--text-dim)">GPIO <span id="pinY1">13</span> | PWM 50Hz</div>
+          <div class="tag tag-green" id="tagY1">IDLE</div>
+        </div>
+      </div>
+
+      <!-- Y2 軸量規 -->
+      <div class="card">
+        <div class="card-title"><span class="icon">↕️</span>Y2 軸馬達</div>
+        <div class="gauge-container">
+          <canvas class="gauge" id="gaugeY2" width="180" height="180"></canvas>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--accent-purple)" id="gaugeY2Val">1500 µs</div>
+          <div style="font-size:11px;color:var(--text-dim)">GPIO <span id="pinY2">18</span> | PWM 50Hz</div>
+          <div class="tag tag-purple" id="tagY2">IDLE</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 數位 I/O 狀態 -->
+    <div class="grid-2" style="margin-bottom:16px">
+      <div class="card">
+        <div class="card-title"><span class="icon">🔌</span>數位輸出</div>
+        <table class="diag-table">
+          <thead><tr><th>信號</th><th>GPIO</th><th>狀態</th></tr></thead>
+          <tbody>
+            <tr><td>VACUUM 吸盤</td><td>GPIO 24</td><td><span class="tag" id="mon-vacuum">OFF</span></td></tr>
+            <tr><td>Z_DOWN 手臂</td><td>GPIO 25</td><td><span class="tag" id="mon-zdown">OFF</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="icon">🔒</span>限位開關</div>
+        <table class="diag-table">
+          <thead><tr><th>開關</th><th>GPIO</th><th>狀態</th></tr></thead>
+          <tbody>
+            <tr><td>LIM LEFT</td><td>GPIO 17</td><td><span class="tag" id="mon-limleft">正常</span></td></tr>
+            <tr><td>LIM RIGHT</td><td>GPIO 27</td><td><span class="tag" id="mon-limright">正常</span></td></tr>
+            <tr><td>LIM UP</td><td>GPIO 22</td><td><span class="tag" id="mon-limup">正常</span></td></tr>
+            <tr><td>LIM DOWN</td><td>GPIO 23</td><td><span class="tag" id="mon-limdown">正常</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 系統日誌 -->
+    <div class="card">
+      <div class="card-title" style="justify-content:space-between">
+        <span><span class="icon">📋</span>系統日誌</span>
+        <button class="btn" style="padding:4px 10px;font-size:11px" onclick="clearLog()">清除</button>
+      </div>
+      <div class="log-panel" id="logPanel"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       TAB 3: 訊號檢測（PWM 波形）
+  ═══════════════════════════════════════════ -->
+  <div class="tab-content fade-in" id="tab-content-signal">
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title"><span class="icon">📡</span>PWM 訊號說明</div>
+      <table class="diag-table">
+        <thead><tr><th>參數</th><th>X 軸</th><th>Y1 軸</th><th>Y2 軸</th></tr></thead>
+        <tbody>
+          <tr><td>GPIO Pin</td><td>GPIO 12</td><td>GPIO 13</td><td>GPIO 18</td></tr>
+          <tr><td>頻率 (Hz)</td><td>50</td><td>50</td><td>50</td></tr>
+          <tr><td>週期 (ms)</td><td>20</td><td>20</td><td>20</td></tr>
+          <tr><td>當前 Pulse (µs)</td><td id="sig-x-pulse">1500</td><td id="sig-y1-pulse">1500</td><td id="sig-y2-pulse">1500</td></tr>
+          <tr><td>Duty Cycle (%)</td><td id="sig-x-duty">7.500</td><td id="sig-y1-duty">7.500</td><td id="sig-y2-duty">7.500</td></tr>
+          <tr><td>位置百分比</td><td id="sig-x-pct">50.0%</td><td id="sig-y1-pct">50.0%</td><td id="sig-y2-pct">50.0%</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- X 軸波形 -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title" style="justify-content:space-between">
+        <span><span class="icon">〰️</span>X 軸 PWM 波形（即時）</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:12px;height:3px;background:var(--accent-blue);border-radius:2px"></div>
+          <span style="font-size:11px;color:var(--text-dim)">X Motor</span>
+        </div>
+      </div>
+      <canvas id="chartX" height="100" style="background:#060a10;border-radius:8px;border:1px solid var(--border)"></canvas>
+    </div>
+
+    <!-- Y 軸波形 -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title" style="justify-content:space-between">
+        <span><span class="icon">〰️</span>Y 軸 PWM 波形（即時）</span>
+        <div style="display:flex;align-items:center;gap:16px">
+          <div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:3px;background:var(--accent-green);border-radius:2px"></div><span style="font-size:11px;color:var(--text-dim)">Y1</span></div>
+          <div style="display:flex;align-items:center;gap:6px"><div style="width:12px;height:3px;background:var(--accent-purple);border-radius:2px"></div><span style="font-size:11px;color:var(--text-dim)">Y2</span></div>
+        </div>
+      </div>
+      <canvas id="chartY" height="100" style="background:#060a10;border-radius:8px;border:1px solid var(--border)"></canvas>
+    </div>
+
+    <!-- PWM 視覺化說明 -->
+    <div class="card">
+      <div class="card-title"><span class="icon">ℹ️</span>PWM 伺服馬達訊號說明</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+        <div style="padding:16px;background:#0d1117;border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">最小位置（LEFT/DOWN）</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--accent-red)">500 µs</div>
+          <div style="font-size:11px;color:var(--text-dim)">Duty: 2.50%</div>
+          <div style="height:6px;background:var(--bg-dark);border-radius:3px;margin-top:8px;overflow:hidden">
+            <div style="height:100%;width:2.5%;background:var(--accent-red);border-radius:3px"></div>
+          </div>
+        </div>
+        <div style="padding:16px;background:#0d1117;border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">中心位置（IDLE）</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--accent-cyan)">1500 µs</div>
+          <div style="font-size:11px;color:var(--text-dim)">Duty: 7.50%</div>
+          <div style="height:6px;background:var(--bg-dark);border-radius:3px;margin-top:8px;overflow:hidden">
+            <div style="height:100%;width:7.5%;background:var(--accent-cyan);border-radius:3px"></div>
+          </div>
+        </div>
+        <div style="padding:16px;background:#0d1117;border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">最大位置（RIGHT/UP）</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--accent-green)">2500 µs</div>
+          <div style="font-size:11px;color:var(--text-dim)">Duty: 12.50%</div>
+          <div style="height:6px;background:var(--bg-dark);border-radius:3px;margin-top:8px;overflow:hidden">
+            <div style="height:100%;width:12.5%;background:var(--accent-green);border-radius:3px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       TAB 4: 範圍設定
+  ═══════════════════════════════════════════ -->
+  <div class="tab-content fade-in" id="tab-content-settings">
+    <div class="grid-2">
+      <!-- X 軸設定 -->
+      <div class="card">
+        <div class="card-title"><span class="icon">↔️</span>X 軸行程範圍設定</div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div>
+            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:6px">X 軸最小值（µs）</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="number" id="xMinInput" value="500" min="500" max="2500" step="10" style="width:120px">
+              <input type="range" id="xMinSlider" min="500" max="2500" value="500" step="10"
+                oninput="document.getElementById('xMinInput').value=this.value" style="flex:1">
+            </div>
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:6px">X 軸最大值（µs）</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="number" id="xMaxInput" value="2500" min="500" max="2500" step="10" style="width:120px">
+              <input type="range" id="xMaxSlider" min="500" max="2500" value="2500" step="10"
+                oninput="document.getElementById('xMaxInput').value=this.value" style="flex:1">
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="applyXLimits()">✅ 套用 X 軸設定</button>
+            <button class="btn" onclick="resetXLimits()">↩️ 重置預設</button>
+          </div>
+          <div style="background:#0d1117;border-radius:8px;padding:12px;font-size:12px;color:var(--text-sec)">
+            <div>當前設定：<span id="curXMin" style="color:var(--accent-cyan);font-family:'JetBrains Mono',monospace">500</span> ~ <span id="curXMax" style="color:var(--accent-cyan);font-family:'JetBrains Mono',monospace">2500</span> µs</div>
+            <div style="margin-top:4px">行程範圍：<span id="curXRange" style="color:var(--accent-green);font-family:'JetBrains Mono',monospace">2000 µs</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Y 軸設定 -->
+      <div class="card">
+        <div class="card-title"><span class="icon">↕️</span>Y 軸行程範圍設定</div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div>
+            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:6px">Y 軸最小值（µs）</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="number" id="yMinInput" value="500" min="500" max="2500" step="10" style="width:120px">
+              <input type="range" id="yMinSlider" min="500" max="2500" value="500" step="10"
+                oninput="document.getElementById('yMinInput').value=this.value" style="flex:1">
+            </div>
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:6px">Y 軸最大值（µs）</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="number" id="yMaxInput" value="2500" min="500" max="2500" step="10" style="width:120px">
+              <input type="range" id="yMaxSlider" min="500" max="2500" value="2500" step="10"
+                oninput="document.getElementById('yMaxInput').value=this.value" style="flex:1">
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <label style="font-size:13px;color:var(--text-sec)">Y1/Y2 同步模式：</label>
+            <input type="checkbox" id="ySyncSetting" checked>
+            <span style="font-size:12px;color:var(--accent-green)">同步（推薦）</span>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="applyYLimits()">✅ 套用 Y 軸設定</button>
+            <button class="btn" onclick="resetYLimits()">↩️ 重置預設</button>
+          </div>
+          <div style="background:#0d1117;border-radius:8px;padding:12px;font-size:12px;color:var(--text-sec)">
+            <div>當前設定：<span id="curYMin" style="color:var(--accent-green);font-family:'JetBrains Mono',monospace">500</span> ~ <span id="curYMax" style="color:var(--accent-green);font-family:'JetBrains Mono',monospace">2500</span> µs</div>
+            <div style="margin-top:4px">行程範圍：<span id="curYRange" style="color:var(--accent-green);font-family:'JetBrains Mono',monospace">2000 µs</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GPIO 引腳對應圖 -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-title"><span class="icon">📌</span>GPIO 引腳對應（BCM 編號）</div>
+      <div class="pin-map">
+        <div class="pin-item"><span class="pin-number">GPIO 12</span><span class="pin-name">X 軸伺服馬達（Hardware PWM）</span><div class="pin-dot" style="background:var(--accent-blue)"></div></div>
+        <div class="pin-item"><span class="pin-number">GPIO 13</span><span class="pin-name">Y1 軸伺服馬達（Hardware PWM）</span><div class="pin-dot" style="background:var(--accent-green)"></div></div>
+        <div class="pin-item"><span class="pin-number">GPIO 18</span><span class="pin-name">Y2 軸伺服馬達（Hardware PWM）</span><div class="pin-dot" style="background:var(--accent-purple)"></div></div>
+        <div class="pin-item"><span class="pin-number">GPIO 24</span><span class="pin-name">VACUUM 吸盤繼電器</span><div class="pin-dot" style="background:var(--accent-amber)"></div></div>
+        <div class="pin-item"><span class="pin-number">GPIO 25</span><span class="pin-name">Z_DOWN 手臂繼電器</span><div class="pin-dot" style="background:var(--accent-amber)"></div></div>
+        <div class="pin-item"><span class="pin-number">GPIO 17</span><span class="pin-name">限位開關 LEFT (INPUT_PULLUP)</span><div class="pin-dot" style="background:var(--accent-red)"></div></div>
+        <div class="pin-item"><span class="pin-number">GPIO 27</span><span class="pin-name">限位開關 RIGHT (INPUT_PULLUP)</span><div class="pin-dot" style="background:var(--accent-red)"></div></div>
+        <div class="pin-item"><span class="pin-number">GPIO 22</span><span class="pin-name">限位開關 UP (INPUT_PULLUP)</span><div class="pin-dot" style="background:var(--accent-red)"></div></div>
+        <div class="pin-item"><span class="pin-number">GPIO 23</span><span class="pin-name">限位開關 DOWN (INPUT_PULLUP)</span><div class="pin-dot" style="background:var(--accent-red)"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       TAB 5: 馬達診斷
+  ═══════════════════════════════════════════ -->
+  <div class="tab-content fade-in" id="tab-content-diagnose">
+
+    <!-- GPIO 模式橫幅 -->
+    <div style="background:rgba(30,58,138,0.3);border:1px solid #3b82f6;border-radius:8px;padding:16px 20px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
+      <span style="font-size:24px">💻</span>
+      <div>
+        <div style="font-weight:600;color:var(--accent-blue)" id="diagModeTitle">Simulation Mode</div>
+        <div style="font-size:12px;color:var(--text-sec)" id="diagModeDesc">非樹梅派環境 - 使用模擬 GPIO，所有功能可正常測試</div>
+      </div>
+      <button class="btn btn-primary" style="margin-left:auto" onclick="loadDiagnose()">🔄 刷新診斷</button>
+    </div>
+
+    <div class="grid-2">
+      <!-- 馬達狀態 -->
+      <div class="card">
+        <div class="card-title"><span class="icon">⚙️</span>馬達即時狀態</div>
+        <table class="diag-table" id="diagMotorTable">
+          <thead><tr><th>馬達</th><th>引腳</th><th>Pulse (µs)</th><th>Duty (%)</th><th>位置</th></tr></thead>
+          <tbody>
+            <tr><td>X 軸</td><td>GPIO 12</td><td id="diag-x-pulse">1500</td><td id="diag-x-duty">7.500</td><td id="diag-x-pos">50.0%</td></tr>
+            <tr><td>Y1 軸</td><td>GPIO 13</td><td id="diag-y1-pulse">1500</td><td id="diag-y1-duty">7.500</td><td id="diag-y1-pos">50.0%</td></tr>
+            <tr><td>Y2 軸</td><td>GPIO 18</td><td id="diag-y2-pulse">1500</td><td id="diag-y2-duty">7.500</td><td id="diag-y2-pos">50.0%</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- PWM 規格 -->
+      <div class="card">
+        <div class="card-title"><span class="icon">📐</span>PWM 訊號規格</div>
+        <table class="diag-table">
+          <tbody>
+            <tr><td>訊號頻率</td><td><span class="tag tag-blue">50 Hz</span></td></tr>
+            <tr><td>週期</td><td><span class="tag tag-blue">20 ms</span></td></tr>
+            <tr><td>最小脈衝</td><td><span class="tag tag-red">500 µs (Duty: 2.5%)</span></td></tr>
+            <tr><td>中心脈衝</td><td><span class="tag tag-blue">1500 µs (Duty: 7.5%)</span></td></tr>
+            <tr><td>最大脈衝</td><td><span class="tag tag-green">2500 µs (Duty: 12.5%)</span></td></tr>
+            <tr><td>樹梅派 PWM</td><td><span class="tag tag-purple">Hardware PWM (pigpio)</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 馬達測試 -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-title"><span class="icon">🧪</span>馬達測試</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+        <button class="btn btn-primary" onclick="testMotor('x')">▶ 測試 X 軸（掃描）</button>
+        <button class="btn btn-success" onclick="testMotor('y')">▶ 測試 Y 軸（掃描）</button>
+        <button class="btn btn-warning" onclick="testVacuum()">▶ 測試 VACUUM</button>
+        <button class="btn btn-danger" onclick="stopTest()">⏹ 停止測試</button>
+      </div>
+      <div style="font-size:12px;color:var(--text-dim);background:#0d1117;border-radius:6px;padding:10px" id="testStatus">
+        🔵 等待測試指令...
+      </div>
+      <div class="divider"></div>
+      <div class="card-title"><span class="icon">📋</span>診斷日誌</div>
+      <div class="log-panel" id="diagLog"></div>
+    </div>
+
+    <!-- 連線狀態 -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-title"><span class="icon">🌐</span>系統資訊</div>
+      <div class="grid-2">
+        <div>
+          <table class="diag-table">
+            <tbody>
+              <tr><td>WebSocket 狀態</td><td><span class="tag" id="ws-status-tag">連線中</span></td></tr>
+              <tr><td>更新頻率</td><td><span class="tag tag-blue">10 Hz (100ms)</span></td></tr>
+              <tr><td>PWM 歷史點數</td><td><span class="tag tag-purple">60 點</span></td></tr>
+              <tr><td>後端框架</td><td><span class="tag tag-blue">Flask + SocketIO</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <table class="diag-table">
+            <tbody>
+              <tr><td>GPIO 模式</td><td><span class="tag" id="diag-gpio-mode">-</span></td></tr>
+              <tr><td>伺服馬達數量</td><td><span class="tag tag-blue">3 顆 (X + Y1 + Y2)</span></td></tr>
+              <tr><td>數位輸出</td><td><span class="tag tag-amber">2 路 (VAC + Z)</span></td></tr>
+              <tr><td>限位開關</td><td><span class="tag tag-red">4 路</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end main-container -->
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
