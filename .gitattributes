@@ -1,0 +1,9 @@
+# 確保 shell 腳本在所有平台使用 LF 換行
+*.sh    text eol=lf
+*.py    text eol=lf
+*.html  text eol=lf
+*.css   text eol=lf
+*.js    text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.json  text eol=lf
