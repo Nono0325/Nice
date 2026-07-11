@@ -16,6 +16,10 @@ let state = {
   lim_left: false, lim_right: false, lim_up: false, lim_down: false,
   x_min: 500, x_max: 2500, y_min: 500, y_max: 2500,
   y_sync: true,
+  x_scale: 10.0, y_scale: 10.0,
+  x_max_speed: 2000.0, x_accel_steps: 100.0,
+  y_max_speed: 2000.0, y_accel_steps: 100.0,
+  motor_locked: true,
   timestamp: '',
   gpio_mode: '-'
 };
@@ -220,14 +224,35 @@ function updateUI() {
   const xSlider = document.getElementById('xSlider');
   if (xSlider && document.activeElement !== xSlider) xSlider.value = xPct;
 
+  // 真實物理距離 (mm)
+  const xScale = s.x_scale || 10.0;
+  const yScale = s.y_scale || 10.0;
+  const xMm = (s.x_pulse - 500) / xScale;
+  setEl('xMmDisplay', el => el.textContent = `${xMm.toFixed(1)} mm`);
+
   // Y 軸位置條
   const yPct = Math.max(0, Math.min(100, s.y_pct || 0));
   setEl('yBar', el => el.style.width = `${yPct}%`);
   setEl('yPctDisplay', el => el.textContent = `${yPct.toFixed(1)}%`);
   setEl('y1PulseDisplay', el => el.textContent = `${s.y1_pulse} µs`);
   setEl('y2PulseDisplay', el => el.textContent = `${s.y2_pulse} µs`);
+  const yMm = (s.y1_pulse - 500) / yScale;
+  setEl('yMmDisplay', el => el.textContent = `${yMm.toFixed(1)} mm`);
+  
   const ySlider = document.getElementById('ySlider');
   if (ySlider && document.activeElement !== ySlider) ySlider.value = yPct;
+
+  // 進階設定輸入值綁定
+  setElValue('xMaxSpeedInput', s.x_max_speed || 2000);
+  setElValue('xAccelStepsInput', s.x_accel_steps || 100);
+  setElValue('xScaleInput', s.x_scale || 10);
+  setElValue('yMaxSpeedInput', s.y_max_speed || 2000);
+  setElValue('yAccelStepsInput', s.y_accel_steps || 100);
+  setElValue('yScaleInput', s.y_scale || 10);
+
+  // 馬達鎖定按鈕狀態
+  const lockBtn = document.getElementById('btnMotorLock');
+  if (lockBtn) lockBtn.className = 'btn-amber-toggle' + (s.motor_locked ? ' on' : '');
 
   // Arm Down / Vacuum 切換按鈕
   const zBtn = document.getElementById('btnZDown');
@@ -581,6 +606,452 @@ async function apiPost(url, body = {}) {
   }
 }
 
+function setElValue(id, val) {
+  const el = document.getElementById(id);
+  if (el && document.activeElement !== el) el.value = val;
+}
+
+// ── 進階設定套用 ────────────────────────────────────────────────
+async function applyAdvancedLimits() {
+  const xMaxSpeed = parseFloat(document.getElementById('xMaxSpeedInput').value);
+  const xAccelSteps = parseFloat(document.getElementById('xAccelStepsInput').value);
+  const xScale = parseFloat(document.getElementById('xScaleInput').value);
+  const yMaxSpeed = parseFloat(document.getElementById('yMaxSpeedInput').value);
+  const yAccelSteps = parseFloat(document.getElementById('yAccelStepsInput').value);
+  const yScale = parseFloat(document.getElementById('yScaleInput').value);
+  
+  const r = await apiPost('/api/set_limits', {
+    x_max_speed: xMaxSpeed, x_accel_steps: xAccelSteps, x_scale: xScale,
+    y_max_speed: yMaxSpeed, y_accel_steps: yAccelSteps, y_scale: yScale
+  });
+  if (r.ok) {
+    toast('進階加減速與校準參數已套用！', 'success');
+  }
+}
+
+// ── 馬達鎖定/致能開關 ───────────────────────────────────────────
+async function toggleMotorLock() {
+  const r = await apiPost('/api/set_motor_enable', { locked: !state.motor_locked });
+  if (r.ok) {
+    toast(r.motor_locked ? '馬達已通電鎖定' : '馬達已斷電釋放 (可手動推動)', r.motor_locked ? 'success' : 'warn');
+  }
+}
+
+// ── 操作歷史紀錄 ───────────────────────────────────────────────
+let historyList = [];
+
+socket.on('new_history', (log) => {
+  historyList.push(log);
+  if (historyList.length > 200) historyList.shift();
+  renderHistory();
+});
+
+async function loadHistory() {
+  try {
+    const r = await fetch('/api/history');
+    const data = await r.json();
+    if (data.ok) {
+      historyList = data.history;
+      renderHistory();
+    }
+  } catch (e) {
+    console.error("載入歷史失敗: ", e);
+  }
+}
+
+function renderHistory(filterText = "") {
+  const tbody = document.getElementById('historyTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  
+  const typeColors = {
+    success: 'var(--accent-green)',
+    warn: 'var(--accent-amber)',
+    error: 'var(--accent-red)',
+    info: 'var(--accent-cyan)'
+  };
+  
+  const filtered = historyList.filter(item => 
+    item.msg.toLowerCase().includes(filterText.toLowerCase()) ||
+    item.type.toLowerCase().includes(filterText.toLowerCase())
+  );
+  
+  [...filtered].reverse().forEach(item => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-family:'JetBrains Mono';font-size:11px;color:var(--text-dim)">${item.time}</td>
+      <td><span class="tag" style="background:${typeColors[item.type] || 'gray'};color:#000;font-weight:bold;padding:2px 6px;border-radius:4px;font-size:10px">${item.type.toUpperCase()}</span></td>
+      <td style="color:var(--text-main);font-size:12px">${item.msg}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function filterHistory() {
+  const text = document.getElementById('historySearch').value;
+  renderHistory(text);
+}
+
+async function clearHistory() {
+  if (confirm("確定要清空所有歷史紀錄嗎？")) {
+    const res = await fetch('/api/history', { method: 'DELETE' });
+    const d = await res.json();
+    if (d.ok) {
+      historyList = [];
+      renderHistory();
+      toast('歷史紀錄已清除', 'info');
+    }
+  }
+}
+
+// ── 動作巨集編輯與控制 ───────────────────────────────────────────
+let macros = {};
+let currentMacroName = "";
+
+async function loadMacros() {
+  try {
+    const r = await fetch('/api/macros');
+    const data = await r.json();
+    if (data.ok) {
+      macros = data.macros;
+      populateMacroList();
+    }
+  } catch (e) {
+    console.error("載入巨集失敗: ", e);
+  }
+}
+
+function populateMacroList() {
+  const sel = document.getElementById('macroSelect');
+  if (!sel) return;
+  const prevVal = sel.value;
+  sel.innerHTML = "";
+  
+  Object.keys(macros).forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  });
+  
+  if (prevVal && macros[prevVal]) {
+    sel.value = prevVal;
+  } else if (sel.options.length > 0) {
+    sel.value = sel.options[0].value;
+  }
+  onMacroSelect(sel.value);
+}
+
+function onMacroSelect(name) {
+  currentMacroName = name;
+  const editor = document.getElementById('macroEditor');
+  if (editor && macros[name]) {
+    editor.value = macros[name].join('\n');
+  }
+}
+
+async function saveCurrentMacro() {
+  if (!currentMacroName) {
+    toast("請先選擇或新增一個巨集", "error");
+    return;
+  }
+  const text = document.getElementById('macroEditor').value;
+  const commands = text.split('\n');
+  const r = await apiPost('/api/macros', { name: currentMacroName, commands });
+  if (r.ok) {
+    macros[currentMacroName] = commands;
+    toast(`巨集「${currentMacroName}」儲存成功！`, "success");
+  }
+}
+
+async function createMacro() {
+  const name = document.getElementById('newMacroName').value.trim();
+  if (!name) {
+    toast("請輸入巨集名稱", "error");
+    return;
+  }
+  if (macros[name]) {
+    toast("巨集名稱已存在", "error");
+    return;
+  }
+  const commands = ["# 新巨集腳本", "HOME", "DELAY 500"];
+  const r = await apiPost('/api/macros', { name, commands });
+  if (r.ok) {
+    macros[name] = commands;
+    populateMacroList();
+    document.getElementById('macroSelect').value = name;
+    onMacroSelect(name);
+    document.getElementById('newMacroName').value = "";
+    toast(`巨集「${name}」新增成功`, "success");
+  }
+}
+
+async function deleteMacro() {
+  if (!currentMacroName) return;
+  if (confirm(`確定要刪除巨集「${currentMacroName}」嗎？`)) {
+    const r = await fetch('/api/macros', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: currentMacroName })
+    });
+    const data = await r.json();
+    if (data.ok) {
+      delete macros[currentMacroName];
+      currentMacroName = "";
+      populateMacroList();
+      toast("巨集已刪除", "info");
+    }
+  }
+}
+
+async function runMacro() {
+  if (!currentMacroName) return;
+  const r = await apiPost('/api/macro/run', { action: 'start', name: currentMacroName });
+  if (r.ok) {
+    toast("巨集已啟動執行...", "success");
+  } else {
+    toast(r.msg, "error");
+  }
+}
+
+async function pauseMacro() {
+  const btn = document.getElementById('btnPauseMacro');
+  const action = btn.textContent.includes("暫停") ? "pause" : "resume";
+  const r = await apiPost('/api/macro/run', { action });
+  if (r.ok) {
+    if (action === "pause") {
+      btn.textContent = "▶ 繼續";
+      btn.className = "btn btn-success";
+    } else {
+      btn.textContent = "⏸ 暫停";
+      btn.className = "btn btn-amber";
+    }
+  }
+}
+
+async function stopMacro() {
+  const r = await apiPost('/api/macro/run', { action: 'stop' });
+  if (r.ok) {
+    toast("已發送停止指令", "warn");
+  }
+}
+
+socket.on('macro_status', (data) => {
+  const statusText = document.getElementById('macroStatusText');
+  const lineText = document.getElementById('macroCurrentLine');
+  
+  const runBtn = document.getElementById('btnRunMacro');
+  const pauseBtn = document.getElementById('btnPauseMacro');
+  const stopBtn = document.getElementById('btnStopMacro');
+  
+  if (statusText) {
+    if (data.running) {
+      statusText.textContent = data.paused ? "PAUSED" : "RUNNING";
+      statusText.style.color = data.paused ? "var(--accent-amber)" : "var(--accent-green)";
+    } else {
+      statusText.textContent = "IDLE";
+      statusText.style.color = "var(--accent-cyan)";
+    }
+  }
+  
+  if (lineText && data.current_line !== undefined) {
+    lineText.textContent = data.current_line;
+  }
+  
+  if (runBtn) runBtn.disabled = data.running;
+  if (pauseBtn) {
+    pauseBtn.disabled = !data.running;
+    if (!data.running) {
+      pauseBtn.textContent = "⏸ 暫停";
+      pauseBtn.className = "btn btn-amber";
+    } else if (data.paused) {
+      pauseBtn.textContent = "▶ 繼續";
+      pauseBtn.className = "btn btn-success";
+    } else {
+      pauseBtn.textContent = "⏸ 暫停";
+      pauseBtn.className = "btn btn-amber";
+    }
+  }
+  if (stopBtn) stopBtn.disabled = !data.running;
+});
+
+socket.on('macro_msg', (data) => {
+  toast(`[巨集提示] ${data.msg}`, 'success');
+});
+
+// ── G-code 解析與圖形繪製 ────────────────────────────────────────
+let gcodeLines = [];
+let gcodeRunning = false;
+let gcodeIndex = 0;
+
+function loadGcodeFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  document.getElementById('gcodeFileName').textContent = file.name;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    gcodeLines = text.split('\n');
+    document.getElementById('gcodeTotalLines').textContent = gcodeLines.length;
+    document.getElementById('gcodeProgress').textContent = `0 / ${gcodeLines.length}`;
+    document.getElementById('btnRunGcode').disabled = false;
+    
+    drawGcodePath();
+  };
+  reader.readAsText(file);
+}
+
+function drawGcodePath() {
+  const canvas = document.getElementById('gcodeCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // 繪製格線
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 50; i < 300; i += 50) {
+    ctx.moveTo(i, 0); ctx.lineTo(i, 300);
+    ctx.moveTo(0, i); ctx.lineTo(300, i);
+  }
+  ctx.stroke();
+  
+  // 繪製軌跡
+  ctx.strokeStyle = '#3b82f6';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  
+  let lastX = 0, lastY = 0;
+  let first = true;
+  
+  gcodeLines.forEach(line => {
+    line = line.split(';')[0].split('(')[0].trim();
+    if (!line) return;
+    const parts = line.split(/\s+/);
+    const cmd = parts[0].toUpperCase();
+    
+    if (cmd === 'G0' || cmd === 'G1') {
+      let newX = lastX, newY = lastY;
+      parts.forEach(part => {
+        if (part.startsWith('X') || part.startsWith('x')) {
+          newX = parseFloat(part.substring(1));
+        } else if (part.startsWith('Y') || part.startsWith('y')) {
+          newY = parseFloat(part.substring(1));
+        }
+      });
+      
+      const canvasX = (newX / 200.0) * 300;
+      const canvasY = 300 - (newY / 200.0) * 300;
+      
+      if (first) {
+        ctx.moveTo(canvasX, canvasY);
+        first = false;
+      } else {
+        ctx.lineTo(canvasX, canvasY);
+      }
+      
+      lastX = newX;
+      lastY = newY;
+    }
+  });
+  ctx.stroke();
+  
+  // 繪製起點紅點
+  ctx.fillStyle = '#ef4444';
+  ctx.beginPath();
+  ctx.arc(0, 300, 5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+async function runGcode() {
+  if (gcodeLines.length === 0 || gcodeRunning) return;
+  
+  gcodeRunning = true;
+  document.getElementById('btnRunGcode').disabled = true;
+  document.getElementById('btnStopGcode').disabled = false;
+  
+  addLog("G-code 執行開始", "success");
+  
+  let lastX = 0, lastY = 0;
+  
+  for (gcodeIndex = 0; gcodeIndex < gcodeLines.length; gcodeIndex++) {
+    if (!gcodeRunning) break;
+    
+    document.getElementById('gcodeProgress').textContent = `${gcodeIndex + 1} / ${gcodeLines.length}`;
+    
+    let line = gcodeLines[gcodeIndex].split(';')[0].split('(')[0].trim();
+    if (!line) continue;
+    
+    const parts = line.split(/\s+/);
+    const cmd = parts[0].toUpperCase();
+    
+    if (cmd === 'G0' || cmd === 'G1') {
+      let targetX = lastX;
+      let targetY = lastY;
+      let hasMove = false;
+      
+      parts.forEach(part => {
+        if (part.startsWith('X') || part.startsWith('x')) {
+          targetX = parseFloat(part.substring(1));
+          hasMove = true;
+        } else if (part.startsWith('Y') || part.startsWith('y')) {
+          targetY = parseFloat(part.substring(1));
+          hasMove = true;
+        }
+      });
+      
+      if (hasMove) {
+        const xScale = state.x_scale || 10.0;
+        const yScale = state.y_scale || 10.0;
+        const pulseX = 500 + targetX * xScale;
+        const pulseY = 500 + targetY * yScale;
+        
+        await apiPost('/api/set_position', { axis: 'x', pct: (pulseX - state.x_min) / (state.x_max - state.x_min) * 100 });
+        await apiPost('/api/set_position', { axis: 'y', pct: (pulseY - state.y_min) / (state.y_max - state.y_min) * 100 });
+        
+        while (gcodeRunning) {
+          const diffX = Math.abs(state.x_pulse - pulseX);
+          const diffY = Math.abs(state.y1_pulse - pulseY);
+          if (diffX < 10 && diffY < 10) {
+            break;
+          }
+          await sleep(100);
+        }
+        
+        lastX = targetX;
+        lastY = targetY;
+      }
+    } else if (cmd === 'G28') {
+      await apiPost('/api/home', { axis: 'all' });
+      await sleep(2000);
+      lastX = 0;
+      lastY = 0;
+    } else if (cmd === 'M106') {
+      await apiPost('/api/vacuum', { on: true });
+      await sleep(500);
+    } else if (cmd === 'M107') {
+      await apiPost('/api/vacuum', { on: false });
+      await sleep(500);
+    }
+  }
+  
+  gcodeRunning = false;
+  document.getElementById('btnRunGcode').disabled = false;
+  document.getElementById('btnStopGcode').disabled = true;
+  addLog("G-code 執行結束", "success");
+  toast("G-code 執行完成！", "success");
+}
+
+function stopGcode() {
+  gcodeRunning = false;
+  document.getElementById('btnRunGcode').disabled = false;
+  document.getElementById('btnStopGcode').disabled = true;
+  addLog("G-code 執行已被使用者終止", "warn");
+}
+
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // ── 時鐘 ─────────────────────────────────────────────────────
@@ -608,6 +1079,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initCharts();
   setInterval(updateClock, 1000);
   updateClock();
+  loadHistory();
+  loadMacros();
   addLog('系統介面載入完成', 'success');
   addLog('使用 ← → ↑ ↓ 方向鍵快速控制馬達', 'info');
   addLog('V=吸盤切換 | Z=手臂切換 | H=全部歸零', 'info');

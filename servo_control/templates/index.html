@@ -50,6 +50,12 @@
   <button class="tab-btn" onclick="switchTab('diagnose')" id="tab-diagnose">
     🔬 馬達診斷
   </button>
+  <button class="tab-btn" onclick="switchTab('macros')" id="tab-macros">
+    🤖 動作巨集
+  </button>
+  <button class="tab-btn" onclick="switchTab('gcode')" id="tab-gcode">
+    📁 G-code 預覽
+  </button>
 </div>
 
 <!-- ── Toast 通知 ── -->
@@ -129,7 +135,10 @@
     <div class="position-bar-section">
       <div class="position-bar-header">
         <span class="section-title">X 軸位置</span>
-        <div class="position-value-display" id="xPctDisplay">50.0%</div>
+        <div style="display:flex;gap:12px;align-items:center">
+          <div class="position-value-display" id="xMmDisplay" style="color:var(--accent-cyan)">0.0 mm</div>
+          <div class="position-value-display" id="xPctDisplay">50.0%</div>
+        </div>
       </div>
       <div class="position-bar-labels">
         <span>LEFT</span>
@@ -161,7 +170,10 @@
     <div class="position-bar-section">
       <div class="position-bar-header">
         <span class="section-title">Y 軸位置</span>
-        <div class="position-value-display" id="yPctDisplay">50.0%</div>
+        <div style="display:flex;gap:12px;align-items:center">
+          <div class="position-value-display" id="yMmDisplay" style="color:var(--accent-green)">0.0 mm</div>
+          <div class="position-value-display" id="yPctDisplay">50.0%</div>
+        </div>
       </div>
       <div class="position-bar-labels">
         <span>DOWN</span>
@@ -250,6 +262,12 @@
           <button class="btn-amber-toggle" id="btnVacuum" onclick="toggleVacuum()" title="吸盤開關"></button>
         </div>
 
+        <!-- 馬達致能鎖定控制 -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+          <span style="font-size:12px;color:var(--text-dim)">Motor Lock</span>
+          <button class="btn-amber-toggle on" id="btnMotorLock" onclick="toggleMotorLock()" title="鎖定/釋放馬達" style="background-color: var(--accent-green)"></button>
+        </div>
+
         <div class="divider" style="width:1px;height:60px;margin:0 8px"></div>
 
         <!-- 自動取件 -->
@@ -278,7 +296,7 @@
         <div class="gauge-container">
           <canvas class="gauge" id="gaugeX" width="180" height="180"></canvas>
           <div style="font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--accent-cyan)" id="gaugeXVal">1500 µs</div>
-          <div style="font-size:11px;color:var(--text-dim)">GPIO <span id="pinX">12</span> | PWM 50Hz</div>
+          <div style="font-size:11px;color:var(--text-dim)">PUL:12 / DIR:16 / ENA:20</div>
           <div class="tag tag-blue" id="tagX">IDLE</div>
         </div>
       </div>
@@ -289,7 +307,7 @@
         <div class="gauge-container">
           <canvas class="gauge" id="gaugeY1" width="180" height="180"></canvas>
           <div style="font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--accent-green)" id="gaugeY1Val">1500 µs</div>
-          <div style="font-size:11px;color:var(--text-dim)">GPIO <span id="pinY1">13</span> | PWM 50Hz</div>
+          <div style="font-size:11px;color:var(--text-dim)">PUL:13 / DIR:19 / ENA:26</div>
           <div class="tag tag-green" id="tagY1">IDLE</div>
         </div>
       </div>
@@ -300,7 +318,7 @@
         <div class="gauge-container">
           <canvas class="gauge" id="gaugeY2" width="180" height="180"></canvas>
           <div style="font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--accent-purple)" id="gaugeY2Val">1500 µs</div>
-          <div style="font-size:11px;color:var(--text-dim)">GPIO <span id="pinY2">18</span> | PWM 50Hz</div>
+          <div style="font-size:11px;color:var(--text-dim)">PUL:13 / DIR:19 / ENA:26</div>
           <div class="tag tag-purple" id="tagY2">IDLE</div>
         </div>
       </div>
@@ -340,6 +358,31 @@
       </div>
       <div class="log-panel" id="logPanel"></div>
     </div>
+
+    <!-- 歷史紀錄 -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-title" style="justify-content:space-between">
+        <span><span class="icon">📜</span>操作歷史紀錄 (持久化)</span>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="historySearch" placeholder="搜尋日誌..." oninput="filterHistory()" style="padding:4px 8px;font-size:12px;border-radius:4px;border:1px solid var(--border);background:var(--bg-dark);color:var(--text-main)">
+          <button class="btn btn-danger" style="padding:4px 10px;font-size:11px" onclick="clearHistory()">清除歷史</button>
+        </div>
+      </div>
+      <div style="max-height:250px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">
+        <table class="diag-table">
+          <thead>
+            <tr>
+              <th style="width:180px">時間</th>
+              <th style="width:100px">類別</th>
+              <th>操作日誌內容</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody">
+            <!-- 動態載入 -->
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <!-- ═══════════════════════════════════════════
@@ -350,9 +393,9 @@
     <div class="card" style="margin-bottom:16px">
       <div class="card-title"><span class="icon">📡</span>PWM 訊號說明</div>
       <table class="diag-table">
-        <thead><tr><th>參數</th><th>X 軸</th><th>Y1 軸</th><th>Y2 軸</th></tr></thead>
+        <thead><tr><th>參數</th><th>X 軸 (步進)</th><th>Y1 軸 (步進)</th><th>Y2 軸 (同步)</th></tr></thead>
         <tbody>
-          <tr><td>GPIO Pin</td><td>GPIO 12</td><td>GPIO 13</td><td>GPIO 18</td></tr>
+          <tr><td>GPIO Pin</td><td>PUL:12 / DIR:16 / ENA:20</td><td>PUL:13 / DIR:19 / ENA:26</td><td>PUL:13 / DIR:19 / ENA:26</td></tr>
           <tr><td>頻率 (Hz)</td><td>50</td><td>50</td><td>50</td></tr>
           <tr><td>週期 (ms)</td><td>20</td><td>20</td><td>20</td></tr>
           <tr><td>當前 Pulse (µs)</td><td id="sig-x-pulse">1500</td><td id="sig-y1-pulse">1500</td><td id="sig-y2-pulse">1500</td></tr>
@@ -491,13 +534,60 @@
       </div>
     </div>
 
+    <!-- 速度規劃與物理校準 -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-title"><span class="icon">⚡</span>馬達加減速與比例校準設定</div>
+      <div class="grid-2">
+        <div>
+          <h4 style="color:var(--accent-cyan);margin-bottom:12px">X 軸步進馬達設定</h4>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div>
+              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:6px">最大速度頻率 (Max Speed Hz)</label>
+              <input type="number" id="xMaxSpeedInput" value="2000" min="500" max="5000" step="100" style="width:100%;padding:6px;border-radius:4px;background:var(--bg-dark);color:var(--text-main);border:1px solid var(--border)">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:6px">加減速步數 (Accel Steps)</label>
+              <input type="number" id="xAccelStepsInput" value="100" min="10" max="1000" step="10" style="width:100%;padding:6px;border-radius:4px;background:var(--bg-dark);color:var(--text-main);border:1px solid var(--border)">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:6px">物理行程比例 (us per mm)</label>
+              <input type="number" id="xScaleInput" value="10.0" min="1" max="100" step="0.1" style="width:100%;padding:6px;border-radius:4px;background:var(--bg-dark);color:var(--text-main);border:1px solid var(--border)">
+            </div>
+          </div>
+        </div>
+        <div>
+          <h4 style="color:var(--accent-green);margin-bottom:12px">Y 軸步進馬達設定</h4>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div>
+              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:6px">最大速度頻率 (Max Speed Hz)</label>
+              <input type="number" id="yMaxSpeedInput" value="2000" min="500" max="5000" step="100" style="width:100%;padding:6px;border-radius:4px;background:var(--bg-dark);color:var(--text-main);border:1px solid var(--border)">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:6px">加減速步數 (Accel Steps)</label>
+              <input type="number" id="yAccelStepsInput" value="100" min="10" max="1000" step="10" style="width:100%;padding:6px;border-radius:4px;background:var(--bg-dark);color:var(--text-main);border:1px solid var(--border)">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:6px">物理行程比例 (us per mm)</label>
+              <input type="number" id="yScaleInput" value="10.0" min="1" max="100" step="0.1" style="width:100%;padding:6px;border-radius:4px;background:var(--bg-dark);color:var(--text-main);border:1px solid var(--border)">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="applyAdvancedLimits()">✅ 套用進階設定</button>
+      </div>
+    </div>
+
     <!-- GPIO 引腳對應圖 -->
     <div class="card" style="margin-top:16px">
       <div class="card-title"><span class="icon">📌</span>GPIO 引腳對應（BCM 編號）</div>
       <div class="pin-map">
-        <div class="pin-item"><span class="pin-number">GPIO 12</span><span class="pin-name">X 軸伺服馬達（Hardware PWM）</span><div class="pin-dot" style="background:var(--accent-blue)"></div></div>
-        <div class="pin-item"><span class="pin-number">GPIO 13</span><span class="pin-name">Y1 軸伺服馬達（Hardware PWM）</span><div class="pin-dot" style="background:var(--accent-green)"></div></div>
-        <div class="pin-item"><span class="pin-number">GPIO 18</span><span class="pin-name">Y2 軸伺服馬達（Hardware PWM）</span><div class="pin-dot" style="background:var(--accent-purple)"></div></div>
+        <div class="pin-item"><span class="pin-number">GPIO 12</span><span class="pin-name">X_PUL 步進脈衝</span><div class="pin-dot" style="background:var(--accent-blue)"></div></div>
+        <div class="pin-item"><span class="pin-number">GPIO 16</span><span class="pin-name">X_DIR 步進方向</span><div class="pin-dot" style="background:var(--accent-blue)"></div></div>
+        <div class="pin-item"><span class="pin-number">GPIO 20</span><span class="pin-name">X_ENA 步進致能</span><div class="pin-dot" style="background:var(--accent-blue)"></div></div>
+        <div class="pin-item"><span class="pin-number">GPIO 13</span><span class="pin-name">Y_PUL 步進脈衝</span><div class="pin-dot" style="background:var(--accent-green)"></div></div>
+        <div class="pin-item"><span class="pin-number">GPIO 19</span><span class="pin-name">Y_DIR 步進方向</span><div class="pin-dot" style="background:var(--accent-green)"></div></div>
+        <div class="pin-item"><span class="pin-number">GPIO 26</span><span class="pin-name">Y_ENA 步進致能</span><div class="pin-dot" style="background:var(--accent-green)"></div></div>
         <div class="pin-item"><span class="pin-number">GPIO 24</span><span class="pin-name">VACUUM 吸盤繼電器</span><div class="pin-dot" style="background:var(--accent-amber)"></div></div>
         <div class="pin-item"><span class="pin-number">GPIO 25</span><span class="pin-name">Z_DOWN 手臂繼電器</span><div class="pin-dot" style="background:var(--accent-amber)"></div></div>
         <div class="pin-item"><span class="pin-number">GPIO 17</span><span class="pin-name">限位開關 LEFT (INPUT_PULLUP)</span><div class="pin-dot" style="background:var(--accent-red)"></div></div>
@@ -528,11 +618,11 @@
       <div class="card">
         <div class="card-title"><span class="icon">⚙️</span>馬達即時狀態</div>
         <table class="diag-table" id="diagMotorTable">
-          <thead><tr><th>馬達</th><th>引腳</th><th>Pulse (µs)</th><th>Duty (%)</th><th>位置</th></tr></thead>
+          <thead><tr><th>馬達</th><th>引腳 (PUL/DIR/ENA)</th><th>位置值 (µs)</th><th>占空比 (%)</th><th>位置百分比</th></tr></thead>
           <tbody>
-            <tr><td>X 軸</td><td>GPIO 12</td><td id="diag-x-pulse">1500</td><td id="diag-x-duty">7.500</td><td id="diag-x-pos">50.0%</td></tr>
-            <tr><td>Y1 軸</td><td>GPIO 13</td><td id="diag-y1-pulse">1500</td><td id="diag-y1-duty">7.500</td><td id="diag-y1-pos">50.0%</td></tr>
-            <tr><td>Y2 軸</td><td>GPIO 18</td><td id="diag-y2-pulse">1500</td><td id="diag-y2-duty">7.500</td><td id="diag-y2-pos">50.0%</td></tr>
+            <tr><td>X 軸 (步進)</td><td>12 / 16 / 20</td><td id="diag-x-pulse">1500</td><td id="diag-x-duty">7.500</td><td id="diag-x-pos">50.0%</td></tr>
+            <tr><td>Y1 軸 (步進)</td><td>13 / 19 / 26</td><td id="diag-y1-pulse">1500</td><td id="diag-y1-duty">7.500</td><td id="diag-y1-pos">50.0%</td></tr>
+            <tr><td>Y2 軸 (同步)</td><td>13 / 19 / 26</td><td id="diag-y2-pulse">1500</td><td id="diag-y2-duty">7.500</td><td id="diag-y2-pos">50.0%</td></tr>
           </tbody>
         </table>
       </div>
@@ -593,6 +683,90 @@
               <tr><td>限位開關</td><td><span class="tag tag-red">4 路</span></td></tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       TAB 6: 動作巨集編輯器
+  ═══════════════════════════════════════════ -->
+  <div class="tab-content fade-in" id="tab-content-macros">
+    <div class="grid-2">
+      <!-- 巨集列表與管理 -->
+      <div class="card">
+        <div class="card-title"><span class="icon">📂</span>巨集腳本管理</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div>
+            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:6px">選擇巨集腳本</label>
+            <select id="macroSelect" onchange="onMacroSelect(this.value)" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-dark);color:var(--text-main);border:1px solid var(--border)">
+              <!-- 動態載入 -->
+            </select>
+          </div>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="newMacroName" placeholder="新巨集名稱..." style="flex:1;padding:6px 10px;border-radius:4px;border:1px solid var(--border);background:var(--bg-dark);color:var(--text-main)">
+            <button class="btn btn-success" onclick="createMacro()">➕ 新增</button>
+            <button class="btn btn-danger" onclick="deleteMacro()">🗑️ 刪除</button>
+          </div>
+          <div class="divider"></div>
+          <div class="card-title"><span class="icon">⚡</span>巨集執行控制</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-success" id="btnRunMacro" onclick="runMacro()" style="padding:10px 20px">▶ 執行巨集</button>
+            <button class="btn btn-amber" id="btnPauseMacro" onclick="pauseMacro()" style="padding:10px 20px" disabled>⏸ 暫停</button>
+            <button class="btn btn-danger" id="btnStopMacro" onclick="stopMacro()" style="padding:10px 20px" disabled>⏹ 停止</button>
+          </div>
+          <div style="margin-top:12px;background:#0d1117;border-radius:6px;padding:12px">
+            <div style="font-size:12px;color:var(--text-dim)">執行狀態：<span id="macroStatusText" style="color:var(--accent-cyan);font-weight:bold">IDLE</span></div>
+            <div style="font-size:12px;color:var(--text-dim);margin-top:4px">目前執行行數：<span id="macroCurrentLine" style="color:var(--accent-green);font-family:'JetBrains Mono'">0</span></div>
+          </div>
+        </div>
+      </div>
+      <!-- 巨集編輯器 -->
+      <div class="card">
+        <div class="card-title" style="justify-content:space-between">
+          <span><span class="icon">📝</span>巨集編輯器</span>
+          <button class="btn btn-primary" onclick="saveCurrentMacro()">💾 儲存腳本</button>
+        </div>
+        <textarea id="macroEditor" style="width:100%;height:320px;background:#060a10;color:#10b981;font-family:'JetBrains Mono',monospace;font-size:13px;padding:12px;border:1px solid var(--border);border-radius:8px;resize:none" placeholder="# 輸入動作指令...&#10;MOVE X 1500&#10;DELAY 500&#10;VACUUM ON"></textarea>
+        <div style="margin-top:8px;font-size:11px;color:var(--text-dim)">
+          支援指令：MOVE X/Y/Y1/Y2 [us] | DELAY [ms] | VACUUM ON/OFF | ARM UP/DOWN | HOME [axis] | MSG [text]
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       TAB 7: G-code 預覽與控制
+  ═══════════════════════════════════════════ -->
+  <div class="tab-content fade-in" id="tab-content-gcode">
+    <div class="grid-2">
+      <!-- 檔案上傳與控制 -->
+      <div class="card">
+        <div class="card-title"><span class="icon">📁</span>G-code 檔案控制</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div>
+            <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:6px">選擇或拖曳 G-code 檔案 (.gcode / .nc)</label>
+            <input type="file" id="gcodeFileInput" accept=".gcode,.nc" onchange="loadGcodeFile(event)" style="width:100%;padding:10px;border-radius:6px;background:var(--bg-dark);border:1px solid var(--border);color:var(--text-sec)">
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-success" id="btnRunGcode" onclick="runGcode()" style="flex:1;padding:12px" disabled>▶ 執行 G-code</button>
+            <button class="btn btn-danger" id="btnStopGcode" onclick="stopGcode()" style="flex:1;padding:12px" disabled>⏹ 停止執行</button>
+          </div>
+          <div style="background:#0d1117;border-radius:6px;padding:12px;font-size:12px;color:var(--text-sec)">
+            <div>檔案名稱：<span id="gcodeFileName" style="color:var(--accent-cyan)">未選取</span></div>
+            <div>總行數：<span id="gcodeTotalLines" style="color:var(--accent-cyan)">0</span></div>
+            <div>目前進度：<span id="gcodeProgress" style="color:var(--accent-green)">0 / 0</span></div>
+          </div>
+        </div>
+      </div>
+      <!-- 圖形路覽 (Canvas) -->
+      <div class="card">
+        <div class="card-title"><span class="icon">🖼️</span>2D 圖形路徑預覽</div>
+        <div style="display:flex;justify-content:center;background:#060a10;border-radius:8px;padding:12px;border:1px solid var(--border)">
+          <canvas id="gcodeCanvas" width="300" height="300" style="background:#000000;border-radius:6px"></canvas>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:var(--text-dim);text-align:center">
+          綠點：目前座標 | 藍線：G0/G1 移動路徑 (模擬行程: 0 ~ 200 mm)
         </div>
       </div>
     </div>
