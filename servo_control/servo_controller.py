@@ -752,38 +752,68 @@ def api_pickup():
         state['pickup_active'] = True
         add_history("自動取件程序開始", "success")
         try:
-            # 1. 移動到取件位置
+            # 1. 系統初始化
+            socketio.emit('pickup_step', {'step': 'init'})
+            time.sleep(0.5)
+
+            # 2. 回原點
+            socketio.emit('pickup_step', {'step': 'home1'})
+            home_axis('all')
+            time.sleep(1.0)
+
+            # 3. 確認模具
+            socketio.emit('pickup_step', {'step': 'check-mold'})
+            time.sleep(0.8)
+
+            # 4. 移動到模具一
+            socketio.emit('pickup_step', {'step': 'move-mold1'})
             x_pickup = state['x_max'] - 200
             set_servo_pulse('x', x_pickup)
             time.sleep(0.8)
-            # 2. 手臂下降
+
+            # 5. 手臂下降與磁吸工件
             set_digital_output('z_down', True)
             add_history("手臂下降中", "info")
             time.sleep(1.0)
-            # 3. 吸盤啟動
+
+            socketio.emit('pickup_step', {'step': 'suck'})
             set_digital_output('vacuum', True)
             add_history("吸盤開啟並吸附工件", "info")
             time.sleep(0.5)
-            # 4. 手臂上升
+
+            # 6. 確認已磁吸？
+            socketio.emit('pickup_step', {'step': 'check-suck'})
+            time.sleep(0.8)
+
+            # 7. 手臂上升與移動到模具二
             set_digital_output('z_down', False)
             add_history("吸附成功，手臂上升", "info")
             time.sleep(0.8)
-            # 5. X 移動到放置位置
+
+            socketio.emit('pickup_step', {'step': 'move-mold2'})
             x_place = state['x_min'] + 200
             set_servo_pulse('x', x_place)
             time.sleep(0.8)
-            # 6. 手臂下降
+
+            # 8. 手臂下降與放下工件
             set_digital_output('z_down', True)
             add_history("到達放料點，手臂下降", "info")
             time.sleep(0.8)
-            # 7. 釋放吸盤
+
+            socketio.emit('pickup_step', {'step': 'drop'})
             set_digital_output('vacuum', False)
             add_history("吸盤關閉，工件已釋放", "info")
             time.sleep(0.5)
-            # 8. 手臂上升
+
+            # 9. 確認已放下？
+            socketio.emit('pickup_step', {'step': 'check-drop'})
+            time.sleep(0.8)
+
+            # 10. 回原點
             set_digital_output('z_down', False)
             time.sleep(0.5)
-            # 9. 回原點
+
+            socketio.emit('pickup_step', {'step': 'home2'})
             set_servo_pulse('x', PULSE_CENTER)
             time.sleep(0.5)
             add_history("自動取件程序完成，回到起點", "success")
@@ -793,6 +823,7 @@ def api_pickup():
             add_history(f"自動取件異常: {e}", "error")
         finally:
             state['pickup_active'] = False
+            socketio.emit('pickup_step', {'step': 'idle'})
 
     t = threading.Thread(target=pickup_sequence, daemon=True)
     t.start()

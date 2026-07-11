@@ -164,6 +164,40 @@ socket.on('state_update', (data) => {
   }
 });
 
+socket.on('pickup_step', (data) => {
+  const card = document.getElementById('flowchartCard');
+  if (!card) return;
+  
+  if (data.step === 'idle') {
+    // 流程結束，延遲隱藏流程圖
+    setTimeout(() => {
+      if (!state.pickup_active) {
+        card.style.display = 'none';
+      }
+    }, 4000);
+    return;
+  }
+  
+  // 顯示流程圖
+  card.style.display = 'block';
+  
+  const steps = ['init', 'home1', 'check-mold', 'move-mold1', 'suck', 'check-suck', 'move-mold2', 'drop', 'check-drop', 'home2'];
+  const activeIdx = steps.indexOf(data.step);
+  
+  steps.forEach((step, idx) => {
+    const el = document.getElementById(`step-${step}`);
+    if (!el) return;
+    
+    if (idx < activeIdx) {
+      el.className = 'flow-step completed';
+    } else if (idx === activeIdx) {
+      el.className = 'flow-step active';
+    } else {
+      el.className = 'flow-step';
+    }
+  });
+});
+
 function setWsStatus(online) {
   const dot  = document.getElementById('wsStatusDot');
   const text = document.getElementById('wsStatusText');
