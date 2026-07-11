@@ -159,6 +159,9 @@ socket.on('disconnect', () => {
 socket.on('state_update', (data) => {
   state = { ...state, ...data };
   updateUI();
+  if (typeof update3D === 'function') {
+    update3D(state);
+  }
 });
 
 function setWsStatus(online) {
@@ -376,6 +379,12 @@ function switchTab(name) {
   document.getElementById(`tab-content-${name}`)?.classList.add('active');
   document.getElementById(`tab-${name}`)?.classList.add('active');
   if (name === 'diagnose') loadDiagnose();
+  if (name === 'simulation3d') {
+    init3D();
+    if (typeof update3D === 'function') {
+      update3D(state);
+    }
+  }
 }
 
 // ── 系統控制 ─────────────────────────────────────────────────
