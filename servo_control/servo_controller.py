@@ -285,16 +285,18 @@ def init_gpio():
     # 數位輸入（限位開關）
     for pin_name in ['LIM_LEFT', 'LIM_RIGHT', 'LIM_UP', 'LIM_DOWN']:
         GPIO.setup(PIN[pin_name], GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        # 先移除可能殘留的 edge detect（服務重啟時尤其必要），再重新設定
         try:
             GPIO.remove_event_detect(PIN[pin_name])
         except Exception:
             pass
-        GPIO.add_event_detect(
-            PIN[pin_name], GPIO.BOTH,
-            callback=lambda ch: read_limit_switches(),
-            bouncetime=50
-        )
+        try:
+            GPIO.add_event_detect(
+                PIN[pin_name], GPIO.BOTH,
+                callback=lambda ch: read_limit_switches(),
+                bouncetime=50
+            )
+        except Exception as e:
+            print(f"[GPIO] Warning: add_event_detect failed for {pin_name} ({e}), polling fallback active.")
 
     print("[GPIO] Initialized stepper motor system successfully")
 
