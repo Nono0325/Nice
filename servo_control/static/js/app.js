@@ -412,12 +412,33 @@ function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
   document.getElementById(`tab-content-${name}`)?.classList.add('active');
   document.getElementById(`tab-${name}`)?.classList.add('active');
+
   if (name === 'diagnose') loadDiagnose();
+
+  if (name === 'macros') {
+    loadMacros();
+  }
+
+  if (name === 'gcode') {
+    drawGcodePath();
+  }
+
   if (name === 'simulation3d') {
     init3D();
-    if (typeof update3D === 'function') {
-      update3D(state);
-    }
+    setTimeout(() => {
+      if (typeof onWindowResize === 'function') onWindowResize();
+      if (typeof update3D === 'function') update3D(state);
+    }, 80);
+  }
+
+  if (name === 'terminal') {
+    setTimeout(() => {
+      document.getElementById('terminalInput')?.focus();
+      const out = document.getElementById('terminalOutput');
+      if (out && out.children.length === 0) {
+        quickTerminalCmd('sudo systemctl status servo-control');
+      }
+    }, 50);
   }
 }
 
@@ -1225,6 +1246,7 @@ document.addEventListener('DOMContentLoaded', () => {
   updateClock();
   loadHistory();
   loadMacros();
+  drawGcodePath();
   addLog('系統介面載入完成', 'success');
   addLog('使用 ← → ↑ ↓ 方向鍵快速控制馬達', 'info');
   addLog('V=吸盤切換 | Z=手臂切換 | H=全部歸零', 'info');

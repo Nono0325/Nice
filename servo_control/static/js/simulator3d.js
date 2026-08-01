@@ -153,10 +153,12 @@ function createPlatform(x, z, h, color) {
 
 function onWindowResize() {
   const container = document.getElementById('canvas3d-container');
-  if (!container) return;
-  camera.aspect = container.clientWidth / container.clientHeight;
+  if (!container || !renderer || !camera) return;
+  const w = container.clientWidth || 800;
+  const h = container.clientHeight || 600;
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.setSize(w, h);
 }
 
 function reset3DView() {
