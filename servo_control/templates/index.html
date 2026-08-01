@@ -65,6 +65,9 @@
   <button class="tab-btn" onclick="switchTab('simulation3d')" id="tab-simulation3d">
     🕹️ 3D 模擬
   </button>
+  <button class="tab-btn" onclick="switchTab('terminal')" id="tab-terminal">
+    💻 系統終端機
+  </button>
 </div>
 
 <!-- ── Toast 通知 ── -->
@@ -835,6 +838,44 @@
             • 狀態：<span id="sim3d-status" style="color:var(--accent-green);font-weight:bold">STANDBY</span>
           </div>
         </div>
+      </div>
+    </div>
+  <!-- ═══════════════════════════════════════════
+       TAB 9: 系統終端機 (Web Terminal)
+  ═══════════════════════════════════════════ -->
+  <div class="tab-content fade-in" id="tab-content-terminal">
+    <div class="card">
+      <div class="card-title" style="justify-content:space-between">
+        <span><span class="icon">💻</span>樹梅派系統終端機 (Web Terminal)</span>
+        <button class="btn" style="padding:4px 10px;font-size:11px" onclick="clearTerminal()">🧹 清除畫面</button>
+      </div>
+
+      <!-- 快捷指令晶片 -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+        <span style="font-size:12px;color:var(--text-dim)">常用指令：</span>
+        <button class="step-chip" onclick="quickTerminalCmd('sudo systemctl status servo-control')">服務狀態</button>
+        <button class="step-chip" onclick="quickTerminalCmd('sudo journalctl -u servo-control -n 30 --no-pager')">即時日誌</button>
+        <button class="step-chip" onclick="quickTerminalCmd('vcgencmd measure_temp')">CPU 溫度</button>
+        <button class="step-chip" onclick="quickTerminalCmd('free -h')">記憶體</button>
+        <button class="step-chip" onclick="quickTerminalCmd('df -h')">磁碟空間</button>
+        <button class="step-chip" onclick="quickTerminalCmd('uptime')">開機時間</button>
+        <button class="step-chip" onclick="quickTerminalCmd('hostname -I')">IP 位址</button>
+        <button class="step-chip" onclick="quickTerminalCmd('uname -a')">系統版本</button>
+      </div>
+
+      <!-- 終端機螢幕 -->
+      <div id="terminalScreen" style="width:100%;height:460px;background:#030712;border:1px solid var(--border);border-radius:8px;padding:16px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#38bdf8;overflow-y:auto;box-shadow:inset 0 0 10px rgba(0,0,0,0.8)">
+        <div style="color:var(--accent-green);margin-bottom:6px">Welcome to Raspberry Pi Web Console [servo-control]</div>
+        <div style="color:var(--text-dim);margin-bottom:12px">輸入 Bash 指令並按下 Enter 鍵執行，可使用 ↑ ↓ 鍵導覽歷史指令...</div>
+        <div id="terminalOutput"></div>
+      </div>
+
+      <!-- 終端機輸入列 -->
+      <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+        <span style="font-family:'JetBrains Mono',monospace;color:var(--accent-green);font-size:13px;white-space:nowrap">nice-pi4@pi:~$</span>
+        <input type="text" id="terminalInput" placeholder="輸入 Bash 指令 (例: ls -la, ping 8.8.8.8 -c 3)..." 
+          onkeydown="onTerminalKey(event)" style="flex:1;padding:10px 12px;border-radius:6px;background:#060a10;border:1px solid var(--border);color:#f8fafc;font-family:'JetBrains Mono',monospace;font-size:13px">
+        <button class="btn btn-primary" onclick="submitTerminalCmd()" style="padding:10px 20px">發送 (Enter)</button>
       </div>
     </div>
   </div>

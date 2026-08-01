@@ -1111,6 +1111,92 @@ async function cmdSystemPower(action) {
   }
 }
 
+// ── Web 系統終端機 ─────────────────────────────────────────────
+let terminalCmdHistory = [];
+let terminalHistoryIdx = -1;
+
+async function submitTerminalCmd(cmdText = null) {
+  const inputEl = document.getElementById('terminalInput');
+  const outputEl = document.getElementById('terminalOutput');
+  const screenEl = document.getElementById('terminalScreen');
+  if (!outputEl || !inputEl) return;
+
+  const cmd = cmdText !== null ? cmdText : inputEl.value.trim();
+  if (!cmd) return;
+
+  if (cmdText === null) {
+    inputEl.value = '';
+    terminalCmdHistory.push(cmd);
+    terminalHistoryIdx = terminalCmdHistory.length;
+  }
+
+  const timeStr = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+  const cmdLine = document.createElement('div');
+  cmdLine.style.color = '#38bdf8';
+  cmdLine.style.marginTop = '8px';
+  cmdLine.innerHTML = `<span style="color:var(--accent-cyan)">[${timeStr}]</span> <span style="color:var(--accent-green)">nice-pi4@pi:~$</span> <strong>${escapeHtml(cmd)}</strong>`;
+  outputEl.appendChild(cmdLine);
+
+  const execLine = document.createElement('div');
+  execLine.style.color = 'var(--text-dim)';
+  execLine.textContent = '⚡ 執行中...';
+  outputEl.appendChild(execLine);
+  screenEl.scrollTop = screenEl.scrollHeight;
+
+  const res = await apiPost('/api/terminal/exec', { cmd });
+  execLine.remove();
+
+  const outBlock = document.createElement('pre');
+  outBlock.style.whiteSpace = 'pre-wrap';
+  outBlock.style.wordBreak = 'break-all';
+  outBlock.style.fontFamily = "'JetBrains Mono', monospace";
+  outBlock.style.margin = '4px 0 12px 0';
+  outBlock.style.padding = '8px 12px';
+  outBlock.style.borderRadius = '4px';
+  outBlock.style.background = res.ok ? 'rgba(15,23,42,0.6)' : 'rgba(127,29,29,0.2)';
+  outBlock.style.borderLeft = `3px solid ${res.ok ? 'var(--accent-green)' : 'var(--accent-red)'}`;
+  outBlock.style.color = res.ok ? '#e2e8f0' : '#fca5a5';
+  outBlock.textContent = res.output || '(無輸出內容)';
+
+  outputEl.appendChild(outBlock);
+  screenEl.scrollTop = screenEl.scrollHeight;
+}
+
+function quickTerminalCmd(cmd) {
+  const inputEl = document.getElementById('terminalInput');
+  if (inputEl) inputEl.value = cmd;
+  submitTerminalCmd(cmd);
+}
+
+function clearTerminal() {
+  const outputEl = document.getElementById('terminalOutput');
+  if (outputEl) outputEl.innerHTML = '';
+}
+
+function onTerminalKey(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    submitTerminalCmd();
+  } else if (e.key === 'ArrowUp') {
+    if (terminalCmdHistory.length > 0 && terminalHistoryIdx > 0) {
+      terminalHistoryIdx--;
+      e.target.value = terminalCmdHistory[terminalHistoryIdx];
+    }
+  } else if (e.key === 'ArrowDown') {
+    if (terminalHistoryIdx < terminalCmdHistory.length - 1) {
+      terminalHistoryIdx++;
+      e.target.value = terminalCmdHistory[terminalHistoryIdx];
+    } else {
+      terminalHistoryIdx = terminalCmdHistory.length;
+      e.target.value = '';
+    }
+  }
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 // ── 時鐘 ─────────────────────────────────────────────────────
 function updateClock() {
   const el = document.getElementById('clockDisplay');
@@ -1119,6 +1205,7 @@ function updateClock() {
 
 // ── 鍵盤快捷鍵 ───────────────────────────────────────────────
 document.addEventListener('keydown', (e) => {
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
   if (!state.system_run) return;
   switch (e.key) {
     case 'ArrowLeft':  e.preventDefault(); moveAxis('x', -1); break;

@@ -18,6 +18,7 @@ import time
 import math
 import threading
 import json
+import subprocess
 from datetime import datetime
 
 # ── Flask / SocketIO ──────────────────────────────────────────────
@@ -1121,6 +1122,41 @@ def api_system_power():
             return jsonify({'ok': True, 'msg': '模擬模式：已觸發虛擬重啟'})
 
     return jsonify({'ok': False, 'msg': '無效的電源指令'})
+
+@app.route('/api/terminal/exec', methods=['POST'])
+def api_terminal_exec():
+    """Web 系統終端機指令執行"""
+    data = request.get_json(silent=True) or {}
+    cmd = data.get('cmd', '').strip()
+    if not cmd:
+        return jsonify({'ok': False, 'output': '空指令'})
+
+    add_history(f"終端機執行: {cmd}", "info")
+
+    try:
+        # 設定 15 秒逾時保護
+        res = subprocess.run(
+            cmd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+        stdout = res.stdout or ''
+        stderr = res.stderr or ''
+        output = stdout + (f"\n[STDERR]\n{stderr}" if stderr else '')
+        if not output.strip():
+            output = "(指令執行完成，無輸出內容)"
+        return jsonify({
+            'ok': res.returncode == 0,
+            'returncode': res.returncode,
+            'output': output
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({'ok': False, 'output': '❌ 指令執行超時 (超過 15 秒)'})
+    except Exception as e:
+        return jsonify({'ok': False, 'output': f'❌ 執行例外: {str(e)}'})
 
 @socketio.on('cmd_move')
 def on_cmd_move(data):
