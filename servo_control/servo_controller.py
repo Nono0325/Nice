@@ -1105,14 +1105,15 @@ def on_disconnect():
 terminal_sessions = {}  # { token: { 'password': str, 'expires': float } }
 
 def verify_system_password(password):
-    """驗證密碼是否符合 Linux 系統權限 (sudo -S -v) 或模擬模式預設密碼"""
-    if not password:
+    """驗證密碼是否符合 Linux 系統權限 (sudo -k -S -v) 或模擬模式預設密碼"""
+    if not password or not password.strip():
         return False
     if IS_RASPBERRY_PI or os.name == 'posix':
         try:
+            # 加入 -k 參數量強制 reset sudo 權限快取，確保必定檢驗輸入的密碼
             proc = subprocess.run(
-                ["sudo", "-S", "-v"],
-                input=password + "\n",
+                ["sudo", "-k", "-S", "-v"],
+                input=password.strip() + "\n",
                 capture_output=True,
                 text=True,
                 timeout=5
@@ -1121,7 +1122,7 @@ def verify_system_password(password):
         except Exception:
             return False
     else:
-        return password.strip() in ["Nice", "nice", "123456"]
+        return password.strip() in ["Nice", "nice"]
 
 def cleanup_expired_sessions():
     now = time.time()
