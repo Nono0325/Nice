@@ -32,6 +32,8 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 IS_RASPBERRY_PI = False
 try:
     import RPi.GPIO as GPIO
+    # 先 cleanup() 清除前次程序殘留的 GPIO 狀態，避免重啟後 add_event_detect 失敗
+    GPIO.cleanup()
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
     IS_RASPBERRY_PI = True
@@ -283,6 +285,11 @@ def init_gpio():
     # 數位輸入（限位開關）
     for pin_name in ['LIM_LEFT', 'LIM_RIGHT', 'LIM_UP', 'LIM_DOWN']:
         GPIO.setup(PIN[pin_name], GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        # 先移除可能殘留的 edge detect（服務重啟時尤其必要），再重新設定
+        try:
+            GPIO.remove_event_detect(PIN[pin_name])
+        except Exception:
+            pass
         GPIO.add_event_detect(
             PIN[pin_name], GPIO.BOTH,
             callback=lambda ch: read_limit_switches(),
