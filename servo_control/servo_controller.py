@@ -19,6 +19,7 @@ import math
 import threading
 import json
 import subprocess
+import secrets
 from datetime import datetime
 
 # ── Flask / SocketIO ──────────────────────────────────────────────
@@ -1100,18 +1101,85 @@ def on_connect():
 def on_disconnect():
     print(f"[WS] Client disconnected: {request.sid}")
 
+# ── 資安驗證 Session 管理 ─────────────────────────────────────────
+terminal_sessions = {}  # { token: { 'password': str, 'expires': float } }
+
+def verify_system_password(password):
+    """驗證密碼是否符合 Linux 系統權限 (sudo -S -v) 或模擬模式預設密碼"""
+    if not password:
+        return False
+    if IS_RASPBERRY_PI or os.name == 'posix':
+        try:
+            proc = subprocess.run(
+                ["sudo", "-S", "-v"],
+                input=password + "\n",
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            return proc.returncode == 0
+        except Exception:
+            return False
+    else:
+        return password.strip() in ["Nice", "nice", "123456"]
+
+def cleanup_expired_sessions():
+    now = time.time()
+    expired = [t for t, s in terminal_sessions.items() if s['expires'] < now]
+    for t in expired:
+        del terminal_sessions[t]
+
+def is_valid_token(token):
+    cleanup_expired_sessions()
+    return token in terminal_sessions
+
+@app.route('/api/terminal/auth', methods=['POST'])
+def api_terminal_auth():
+    """Web 終端機密碼驗證解鎖"""
+    data = request.get_json(silent=True) or {}
+    password = data.get('password', '')
+
+    if verify_system_password(password):
+        token = secrets.token_hex(32)
+        terminal_sessions[token] = {
+            'password': password,
+            'expires': time.time() + 1800  # 30分鐘有效
+        }
+        add_history("Web 終端機通過身份驗證解鎖成功", "success")
+        return jsonify({'ok': True, 'token': token, 'msg': '驗證成功'})
+    else:
+        add_history("Web 終端機身份驗證失敗 (密碼錯誤)", "warn")
+        return jsonify({'ok': False, 'msg': '密碼錯誤，拒絕存取'})
+
+@app.route('/api/terminal/logout', methods=['POST'])
+def api_terminal_logout():
+    """鎖定終端機"""
+    data = request.get_json(silent=True) or {}
+    token = data.get('token', '')
+    if token in terminal_sessions:
+        del terminal_sessions[token]
+    return jsonify({'ok': True})
+
 @app.route('/api/system_power', methods=['POST'])
 def api_system_power():
-    """樹梅派系統關機與重啟"""
+    """樹梅派系統關機與重啟 (受資安密碼驗證保護)"""
     data = request.get_json(silent=True) or {}
     action = data.get('action')  # 'shutdown' or 'reboot'
+    token = data.get('token', '')
+    password = data.get('password', '')
+
+    if not (is_valid_token(token) or verify_system_password(password)):
+        return jsonify({'ok': False, 'auth_required': True, 'msg': '權限不足：密碼驗證失敗'})
+
+    user_pwd = terminal_sessions.get(token, {}).get('password', password)
 
     if action == 'shutdown':
         add_history("觸發樹梅派系統關機 (Shutdown)", "warn")
         if IS_RASPBERRY_PI or os.name == 'posix':
             def do_shutdown():
                 time.sleep(1)
-                os.system("sudo shutdown -h now")
+                proc = subprocess.Popen(["sudo", "-S", "shutdown", "-h", "now"], stdin=subprocess.PIPE, text=True)
+                proc.communicate(input=user_pwd + "\n")
             threading.Thread(target=do_shutdown, daemon=True).start()
             return jsonify({'ok': True, 'msg': '樹梅派正在關機中...'})
         else:
@@ -1122,7 +1190,8 @@ def api_system_power():
         if IS_RASPBERRY_PI or os.name == 'posix':
             def do_reboot():
                 time.sleep(1)
-                os.system("sudo reboot")
+                proc = subprocess.Popen(["sudo", "-S", "reboot"], stdin=subprocess.PIPE, text=True)
+                proc.communicate(input=user_pwd + "\n")
             threading.Thread(target=do_reboot, daemon=True).start()
             return jsonify({'ok': True, 'msg': '樹梅派正在重新啟動中...'})
         else:
@@ -1132,34 +1201,60 @@ def api_system_power():
 
 @app.route('/api/terminal/exec', methods=['POST'])
 def api_terminal_exec():
-    """Web 系統終端機指令執行"""
+    """Web 系統終端機指令執行 (受驗證保護)"""
     data = request.get_json(silent=True) or {}
+    token = data.get('token', '')
     cmd = data.get('cmd', '').strip()
+
+    if not is_valid_token(token):
+        return jsonify({'ok': False, 'auth_required': True, 'output': '🔒 權限不足：請先輸入密碼驗證解鎖終端機'})
+
     if not cmd:
         return jsonify({'ok': False, 'output': '空指令'})
 
+    user_pwd = terminal_sessions[token]['password']
     add_history(f"終端機執行: {cmd}", "info")
 
     try:
-        # 設定 15 秒逾時保護
-        res = subprocess.run(
-            cmd,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=15,
-            cwd=os.path.dirname(os.path.abspath(__file__))
-        )
-        stdout = res.stdout or ''
-        stderr = res.stderr or ''
-        output = stdout + (f"\n[STDERR]\n{stderr}" if stderr else '')
-        if not output.strip():
-            output = "(指令執行完成，無輸出內容)"
-        return jsonify({
-            'ok': res.returncode == 0,
-            'returncode': res.returncode,
-            'output': output
-        })
+        if cmd.startswith("sudo ") and (IS_RASPBERRY_PI or os.name == 'posix'):
+            cmd_with_sudo = "sudo -S " + cmd[5:]
+            proc = subprocess.Popen(
+                cmd_with_sudo,
+                shell=True,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                cwd=os.path.dirname(os.path.abspath(__file__))
+            )
+            stdout, stderr = proc.communicate(input=user_pwd + "\n", timeout=15)
+            output = stdout + (f"\n[STDERR]\n{stderr}" if stderr else '')
+            if not output.strip():
+                output = "(指令執行完成，無輸出內容)"
+            return jsonify({
+                'ok': proc.returncode == 0,
+                'returncode': proc.returncode,
+                'output': output
+            })
+        else:
+            res = subprocess.run(
+                cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=15,
+                cwd=os.path.dirname(os.path.abspath(__file__))
+            )
+            stdout = res.stdout or ''
+            stderr = res.stderr or ''
+            output = stdout + (f"\n[STDERR]\n{stderr}" if stderr else '')
+            if not output.strip():
+                output = "(指令執行完成，無輸出內容)"
+            return jsonify({
+                'ok': res.returncode == 0,
+                'returncode': res.returncode,
+                'output': output
+            })
     except subprocess.TimeoutExpired:
         return jsonify({'ok': False, 'output': '❌ 指令執行超時 (超過 15 秒)'})
     except Exception as e:

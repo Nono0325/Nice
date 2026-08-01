@@ -432,13 +432,7 @@ function switchTab(name) {
   }
 
   if (name === 'terminal') {
-    setTimeout(() => {
-      document.getElementById('terminalInput')?.focus();
-      const out = document.getElementById('terminalOutput');
-      if (out && out.children.length === 0) {
-        quickTerminalCmd('sudo systemctl status servo-control');
-      }
-    }, 50);
+    updateTerminalUI(!!terminalAuthToken);
   }
 }
 
@@ -1118,25 +1112,94 @@ function stopGcode() {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// ── 系統電源管理 (關機 / 重啟) ──────────────────────────────────
-async function cmdSystemPower(action) {
-  const actionText = action === 'reboot' ? '重新啟動' : '關閉電源';
-  if (!confirm(`⚠️ 確定要將樹梅派系統【${actionText}】嗎？`)) return;
-  toast(`正在發送 ${actionText} 指令...`, 'warn');
-  addLog(`發送系統 ${actionText} 指令`, 'warn');
-  const r = await apiPost('/api/system_power', { action });
-  if (r.ok) {
-    toast(`樹梅派正在${actionText}，網頁連線將於幾秒後中斷...`, 'info');
-  } else {
-    toast(`執行失敗: ${r.msg}`, 'error');
-  }
-}
-
-// ── Web 系統終端機 ─────────────────────────────────────────────
+// ── Web 系統終端機與資安驗證 ─────────────────────────────────────
+let terminalAuthToken = sessionStorage.getItem('terminalToken') || "";
 let terminalCmdHistory = [];
 let terminalHistoryIdx = -1;
 
+async function unlockTerminal(e) {
+  if (e) e.preventDefault();
+  const pwdInput = document.getElementById('terminalAuthPassword');
+  const password = pwdInput ? pwdInput.value : '';
+  if (!password) {
+    toast('請輸入系統密碼', 'error');
+    return;
+  }
+
+  toast('正在驗證系統身分與權限...', 'info');
+  const res = await apiPost('/api/terminal/auth', { password });
+  if (res.ok && res.token) {
+    terminalAuthToken = res.token;
+    sessionStorage.setItem('terminalToken', res.token);
+    toast('🔓 身分驗證成功，終端機已解鎖！', 'success');
+    updateTerminalUI(true);
+    submitTerminalCmd('sudo systemctl status servo-control');
+  } else {
+    toast(`❌ 驗證失敗: ${res.msg || '密碼錯誤'}`, 'error');
+    if (pwdInput) pwdInput.value = '';
+  }
+}
+
+async function lockTerminal() {
+  if (terminalAuthToken) {
+    await apiPost('/api/terminal/logout', { token: terminalAuthToken });
+  }
+  terminalAuthToken = "";
+  sessionStorage.removeItem('terminalToken');
+  updateTerminalUI(false);
+  toast('🔒 終端機已鎖定', 'info');
+}
+
+function updateTerminalUI(authenticated) {
+  const authBox = document.getElementById('terminalAuthContainer');
+  const mainBox = document.getElementById('terminalMainContainer');
+  if (authenticated) {
+    if (authBox) authBox.style.display = 'none';
+    if (mainBox) mainBox.style.display = 'block';
+    setTimeout(() => document.getElementById('terminalInput')?.focus(), 50);
+  } else {
+    if (authBox) authBox.style.display = 'block';
+    if (mainBox) mainBox.style.display = 'none';
+  }
+}
+
+async function cmdSystemPower(action) {
+  const actionText = action === 'reboot' ? '重新啟動' : '關閉電源';
+  
+  let pwd = "";
+  if (!terminalAuthToken) {
+    pwd = prompt(`⚠️ 確定要將樹梅派系統【${actionText}】嗎？\n請輸入 Linux 系統權限密碼 (預設: Nice) 以驗證身分：`);
+    if (pwd === null) return;
+    if (!pwd.trim()) {
+      toast("需輸入密碼方可執行系統電源指令", "error");
+      return;
+    }
+  } else {
+    if (!confirm(`⚠️ 確定要將樹梅派系統【${actionText}】嗎？`)) return;
+  }
+
+  toast(`正在發送 ${actionText} 指令...`, 'warn');
+  addLog(`發送系統 ${actionText} 指令`, 'warn');
+
+  const r = await apiPost('/api/system_power', {
+    action: action,
+    token: terminalAuthToken,
+    password: pwd
+  });
+
+  if (r.ok) {
+    toast(`樹梅派正在${actionText}，網頁連線將於幾秒後中斷...`, 'info');
+  } else {
+    toast(`執行失敗: ${r.msg || '密碼驗證失敗'}`, 'error');
+  }
+}
+
 async function submitTerminalCmd(cmdText = null) {
+  if (!terminalAuthToken) {
+    updateTerminalUI(false);
+    return;
+  }
+
   const inputEl = document.getElementById('terminalInput');
   const outputEl = document.getElementById('terminalOutput');
   const screenEl = document.getElementById('terminalScreen');
@@ -1164,8 +1227,14 @@ async function submitTerminalCmd(cmdText = null) {
   outputEl.appendChild(execLine);
   screenEl.scrollTop = screenEl.scrollHeight;
 
-  const res = await apiPost('/api/terminal/exec', { cmd });
+  const res = await apiPost('/api/terminal/exec', { cmd, token: terminalAuthToken });
   execLine.remove();
+
+  if (res.auth_required) {
+    toast('🔒 身分驗證已過期，請重新解鎖', 'warn');
+    lockTerminal();
+    return;
+  }
 
   const outBlock = document.createElement('pre');
   outBlock.style.whiteSpace = 'pre-wrap';

@@ -847,10 +847,29 @@
        TAB 9: 系統終端機 (Web Terminal)
   ═══════════════════════════════════════════ -->
   <div class="tab-content fade-in" id="tab-content-terminal">
-    <div class="card">
+    
+    <!-- 🔐 密碼解鎖面板 (未驗證時顯示) -->
+    <div class="card" id="terminalAuthContainer" style="max-width:550px;margin:40px auto;text-align:center;padding:32px">
+      <div style="font-size:42px;margin-bottom:12px">🔒</div>
+      <div class="card-title" style="justify-content:center;font-size:18px;color:var(--accent-cyan);margin-bottom:8px">樹梅派系統終端機已被保護</div>
+      <div style="font-size:13px;color:var(--text-sec);margin-bottom:20px">
+        為維護系統資安，請輸入 Linux 系統權限密碼 (預設: <code style="color:var(--accent-green)">Nice</code>) 以解鎖 Web Console 指令操作。
+      </div>
+      <form onsubmit="unlockTerminal(event)" style="display:flex;flex-direction:column;gap:12px;max-width:320px;margin:0 auto">
+        <input type="password" id="terminalAuthPassword" placeholder="請輸入系統密碼..." required
+          style="padding:12px 14px;border-radius:6px;background:#060a10;border:1px solid var(--border);color:#f8fafc;font-size:14px;text-align:center">
+        <button type="submit" class="btn btn-primary" style="padding:12px;font-weight:bold">🔓 解鎖權限驗證</button>
+      </form>
+    </div>
+
+    <!-- 💻 終端機控制主體 (通過驗證後顯示) -->
+    <div class="card" id="terminalMainContainer" style="display:none">
       <div class="card-title" style="justify-content:space-between">
-        <span><span class="icon">💻</span>樹梅派系統終端機 (Web Terminal)</span>
-        <button class="btn" style="padding:4px 10px;font-size:11px" onclick="clearTerminal()">🧹 清除畫面</button>
+        <span><span class="icon">💻</span>樹梅派系統終端機 (Web Terminal Console)</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn" style="padding:4px 10px;font-size:11px" onclick="clearTerminal()">🧹 清除畫面</button>
+          <button class="btn btn-danger" style="padding:4px 10px;font-size:11px" onclick="lockTerminal()">🔒 鎖定終端機</button>
+        </div>
       </div>
 
       <!-- 快捷指令晶片 -->

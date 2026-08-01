@@ -146,10 +146,6 @@ if [ "$EUID" -eq 0 ]; then
 
     RUN_USER="${SUDO_USER:-pi}"
 
-    # Configure NOPASSWD rule for Web Terminal commands
-    echo "${RUN_USER} ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/servo-control
-    chmod 0440 /etc/sudoers.d/servo-control
-
     cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
 Description=Raspberry Pi Stepper Motor Controller
