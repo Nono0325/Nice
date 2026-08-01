@@ -1097,6 +1097,20 @@ function stopGcode() {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+// ── 系統電源管理 (關機 / 重啟) ──────────────────────────────────
+async function cmdSystemPower(action) {
+  const actionText = action === 'reboot' ? '重新啟動' : '關閉電源';
+  if (!confirm(`⚠️ 確定要將樹梅派系統【${actionText}】嗎？`)) return;
+  toast(`正在發送 ${actionText} 指令...`, 'warn');
+  addLog(`發送系統 ${actionText} 指令`, 'warn');
+  const r = await apiPost('/api/system_power', { action });
+  if (r.ok) {
+    toast(`樹梅派正在${actionText}，網頁連線將於幾秒後中斷...`, 'info');
+  } else {
+    toast(`執行失敗: ${r.msg}`, 'error');
+  }
+}
+
 // ── 時鐘 ─────────────────────────────────────────────────────
 function updateClock() {
   const el = document.getElementById('clockDisplay');

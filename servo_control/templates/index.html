@@ -32,6 +32,10 @@
       <span id="gpioModeText">-</span>
     </div>
     <div class="time-display" id="clockDisplay">--:--:--</div>
+    <div style="display:flex;gap:6px;margin-left:6px">
+      <button class="btn btn-warning" onclick="cmdSystemPower('reboot')" title="重新啟動樹梅派" style="padding:4px 10px;font-size:11px">🔄 重啟</button>
+      <button class="btn btn-danger" onclick="cmdSystemPower('shutdown')" title="關閉樹梅派電源" style="padding:4px 10px;font-size:11px">⚡ 關機</button>
+    </div>
   </div>
 </nav>
 
@@ -715,6 +719,14 @@
             </tbody>
           </table>
         </div>
+      </div>
+    <!-- 電源管理 -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-title"><span class="icon">⚡</span>樹梅派電源管理</div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-warning" style="padding:10px 20px;font-size:13px" onclick="cmdSystemPower('reboot')">🔄 重新啟動系統 (Reboot)</button>
+        <button class="btn btn-danger" style="padding:10px 20px;font-size:13px" onclick="cmdSystemPower('shutdown')">⚡ 關閉樹梅派電源 (Shutdown)</button>
+        <span style="font-size:12px;color:var(--text-dim)">⚠️ 注意：實施關機後需手動重新拔插電源線方可重啟。</span>
       </div>
     </div>
   </div>

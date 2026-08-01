@@ -1092,6 +1092,36 @@ def on_connect():
 def on_disconnect():
     print(f"[WS] Client disconnected: {request.sid}")
 
+@app.route('/api/system_power', methods=['POST'])
+def api_system_power():
+    """樹梅派系統關機與重啟"""
+    data = request.get_json(silent=True) or {}
+    action = data.get('action')  # 'shutdown' or 'reboot'
+
+    if action == 'shutdown':
+        add_history("觸發樹梅派系統關機 (Shutdown)", "warn")
+        if IS_RASPBERRY_PI or os.name == 'posix':
+            def do_shutdown():
+                time.sleep(1)
+                os.system("sudo shutdown -h now")
+            threading.Thread(target=do_shutdown, daemon=True).start()
+            return jsonify({'ok': True, 'msg': '樹梅派正在關機中...'})
+        else:
+            return jsonify({'ok': True, 'msg': '模擬模式：已觸發虛擬關機'})
+
+    elif action == 'reboot':
+        add_history("觸發樹梅派系統重啟 (Reboot)", "warn")
+        if IS_RASPBERRY_PI or os.name == 'posix':
+            def do_reboot():
+                time.sleep(1)
+                os.system("sudo reboot")
+            threading.Thread(target=do_reboot, daemon=True).start()
+            return jsonify({'ok': True, 'msg': '樹梅派正在重新啟動中...'})
+        else:
+            return jsonify({'ok': True, 'msg': '模擬模式：已觸發虛擬重啟'})
+
+    return jsonify({'ok': False, 'msg': '無效的電源指令'})
+
 @socketio.on('cmd_move')
 def on_cmd_move(data):
     """WebSocket 移動命令（低延遲）
