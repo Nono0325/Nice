@@ -142,6 +142,8 @@ class StepperMotor:
         self.steps_per_unit = 5.0  # 1 us 單元對應 5 個步進脈衝
         
         # 速度規劃參數
+        # ⚠️ 注意：標準 Linux kernel 下 Python time.sleep() 精度約為 1~10ms，
+        #    在真實 Pi 上超過 ~500Hz 將導致脈衝不穩。正式生產建議改用 pigpio 硬體 DMA 脈衝。
         self.max_speed_hz = 2000.0
         self.min_speed_hz = 200.0
         self.accel_steps = 100.0
@@ -149,6 +151,8 @@ class StepperMotor:
         
         self.enabled = True
         self.running = True
+        # [修正1] 歸零時暫停背景執行緒以避免競態條件 (Race Condition)
+        self.pause_for_homing = False
         
         if IS_RASPBERRY_PI:
             GPIO.setup(self.pul_pin, GPIO.OUT, initial=GPIO.LOW)
@@ -171,8 +175,18 @@ class StepperMotor:
             # 共陰極接線下，ENA- 接地，ENA+ (GPIO) 輸出 LOW 鎖定馬達，輸出 HIGH 釋放馬達手推
             GPIO.output(self.ena_pin, GPIO.LOW if value else GPIO.HIGH)
 
+    def halt(self):
+        """[修正1] 立即停止：將目標位置設為當前位置，並重置速度"""
+        self.target_pos = self.current_pos
+        self.current_speed_hz = self.min_speed_hz
+
     def _run(self):
         while self.running:
+            # [修正1] 歸零期間暫停背景執行緒，避免與 home_axis() 競爭 GPIO 寫入
+            if self.pause_for_homing:
+                time.sleep(0.005)
+                continue
+
             if not self.enabled:
                 time.sleep(0.01)
                 continue
@@ -192,6 +206,24 @@ class StepperMotor:
                 
                 self.current_speed_hz = max(self.min_speed_hz, min(self.max_speed_hz, speed))
                 
+                # 限位開關安全防護
+                if diff < 0 and self.name == 'x' and state['lim_left']:
+                    self.target_pos = self.current_pos
+                    time.sleep(0.01)
+                    continue
+                if diff > 0 and self.name == 'x' and state['lim_right']:
+                    self.target_pos = self.current_pos
+                    time.sleep(0.01)
+                    continue
+                if diff < 0 and self.name == 'y' and state['lim_down']:
+                    self.target_pos = self.current_pos
+                    time.sleep(0.01)
+                    continue
+                if diff > 0 and self.name == 'y' and state['lim_up']:
+                    self.target_pos = self.current_pos
+                    time.sleep(0.01)
+                    continue
+
                 if not IS_RASPBERRY_PI:
                     # 模擬模式：平滑移動
                     time.sleep(1.0 / self.current_speed_hz)
@@ -204,24 +236,6 @@ class StepperMotor:
                 # 實際樹梅派模式
                 direction = GPIO.HIGH if diff > 0 else GPIO.LOW
                 GPIO.output(self.dir_pin, direction)
-                
-                # 限位開關安全防護
-                if direction == GPIO.LOW and self.name == 'x' and state['lim_left']:
-                    self.target_pos = self.current_pos
-                    time.sleep(0.01)
-                    continue
-                if direction == GPIO.HIGH and self.name == 'x' and state['lim_right']:
-                    self.target_pos = self.current_pos
-                    time.sleep(0.01)
-                    continue
-                if direction == GPIO.LOW and self.name == 'y' and state['lim_down']:
-                    self.target_pos = self.current_pos
-                    time.sleep(0.01)
-                    continue
-                if direction == GPIO.HIGH and self.name == 'y' and state['lim_up']:
-                    self.target_pos = self.current_pos
-                    time.sleep(0.01)
-                    continue
 
                 # 發送步進脈衝
                 GPIO.output(self.pul_pin, GPIO.HIGH)
@@ -332,27 +346,37 @@ def read_limit_switches():
             state['lim_up']    = y_stepper.current_pos >= state['y_max'] - 10
 
 def home_axis(axis='all'):
-    """馬達歸零（回原點）"""
+    """馬達歸零（回原點）
+    [修正1] 歸零前先設定 pause_for_homing=True 暫停背景步進 Thread，
+    避免與 home_axis() 直接寫入 GPIO 產生競態條件。
+    """
     global x_stepper, y_stepper
     
     if axis in ('x', 'all'):
         print("[HOME] X Axis homing...")
         if IS_RASPBERRY_PI and x_stepper:
-            # 確保致能
-            GPIO.output(x_stepper.ena_pin, GPIO.LOW)
-            GPIO.output(x_stepper.dir_pin, GPIO.LOW) # 負方向向左
-            
-            while True:
-                read_limit_switches()
-                if state['lim_left']:
-                    break
-                # 發送單步脈衝
-                GPIO.output(x_stepper.pul_pin, GPIO.HIGH)
-                time.sleep(1.0 / (2.0 * x_stepper.speed_hz))
-                GPIO.output(x_stepper.pul_pin, GPIO.LOW)
-                time.sleep(1.0 / (2.0 * x_stepper.speed_hz))
-            
-            x_stepper.set_position(state['x_min'])
+            # [修正1] 暫停背景執行緒，確保只有 home_axis() 操作 GPIO
+            x_stepper.pause_for_homing = True
+            time.sleep(0.02)  # 等待背景迴圈確實進入暫停狀態
+            try:
+                # 確保致能
+                GPIO.output(x_stepper.ena_pin, GPIO.LOW)
+                GPIO.output(x_stepper.dir_pin, GPIO.LOW)  # 負方向向左
+                
+                while True:
+                    read_limit_switches()
+                    if state['lim_left']:
+                        break
+                    # 發送單步脈衝
+                    GPIO.output(x_stepper.pul_pin, GPIO.HIGH)
+                    time.sleep(1.0 / (2.0 * x_stepper.min_speed_hz))
+                    GPIO.output(x_stepper.pul_pin, GPIO.LOW)
+                    time.sleep(1.0 / (2.0 * x_stepper.min_speed_hz))
+                
+                x_stepper.set_position(state['x_min'])
+            finally:
+                # [修正1] 無論是否發生例外，都要恢復背景執行緒
+                x_stepper.pause_for_homing = False
         else:
             if x_stepper:
                 x_stepper.set_position(state['x_min'])
@@ -364,21 +388,28 @@ def home_axis(axis='all'):
     if axis in ('y', 'all'):
         print("[HOME] Y Axis homing...")
         if IS_RASPBERRY_PI and y_stepper:
-            # 確保致能
-            GPIO.output(y_stepper.ena_pin, GPIO.LOW)
-            GPIO.output(y_stepper.dir_pin, GPIO.LOW) # 負方向向下
-            
-            while True:
-                read_limit_switches()
-                if state['lim_down']:
-                    break
-                # 發送單步脈衝
-                GPIO.output(y_stepper.pul_pin, GPIO.HIGH)
-                time.sleep(1.0 / (2.0 * y_stepper.speed_hz))
-                GPIO.output(y_stepper.pul_pin, GPIO.LOW)
-                time.sleep(1.0 / (2.0 * y_stepper.speed_hz))
-            
-            y_stepper.set_position(state['y_min'])
+            # [修正1] 暫停背景執行緒
+            y_stepper.pause_for_homing = True
+            time.sleep(0.02)
+            try:
+                # 確保致能
+                GPIO.output(y_stepper.ena_pin, GPIO.LOW)
+                GPIO.output(y_stepper.dir_pin, GPIO.LOW)  # 負方向向下
+                
+                while True:
+                    read_limit_switches()
+                    if state['lim_down']:
+                        break
+                    # 發送單步脈衝
+                    GPIO.output(y_stepper.pul_pin, GPIO.HIGH)
+                    time.sleep(1.0 / (2.0 * y_stepper.min_speed_hz))
+                    GPIO.output(y_stepper.pul_pin, GPIO.LOW)
+                    time.sleep(1.0 / (2.0 * y_stepper.min_speed_hz))
+                
+                y_stepper.set_position(state['y_min'])
+            finally:
+                # [修正1] 恢復背景執行緒
+                y_stepper.pause_for_homing = False
         else:
             if y_stepper:
                 y_stepper.set_position(state['y_min'])
@@ -464,19 +495,21 @@ def api_move():
     try:
         if axis == 'x':
             new_pulse = state['x_pulse'] + delta if target is None else int(target)
+            diff = new_pulse - state['x_pulse']
             # 限位保護
-            if state['lim_left'] and delta < 0:
+            if state['lim_left'] and diff < 0:
                 return jsonify({'ok': False, 'msg': 'X 軸左側限位'})
-            if state['lim_right'] and delta > 0:
+            if state['lim_right'] and diff > 0:
                 return jsonify({'ok': False, 'msg': 'X 軸右側限位'})
             new_pulse = max(state['x_min'], min(state['x_max'], new_pulse))
             set_servo_pulse('x', new_pulse)
 
         elif axis in ('y', 'y1', 'y2'):
             new_pulse = state['y1_pulse'] + delta if target is None else int(target)
-            if state['lim_up']   and delta > 0:
+            diff = new_pulse - state['y1_pulse']
+            if state['lim_up']   and diff > 0:
                 return jsonify({'ok': False, 'msg': 'Y 軸上側限位'})
-            if state['lim_down'] and delta < 0:
+            if state['lim_down'] and diff < 0:
                 return jsonify({'ok': False, 'msg': 'Y 軸下側限位'})
             new_pulse = max(state['y_min'], min(state['y_max'], new_pulse))
             set_servo_pulse('y1', new_pulse)
@@ -493,20 +526,38 @@ def api_move():
 @app.route('/api/set_position', methods=['POST'])
 def api_set_position():
     """透過百分比 0~100 設定馬達位置"""
+    if not state['system_run']:
+        return jsonify({'ok': False, 'msg': '系統未啟動，請按 START'})
+
     data = request.get_json(silent=True) or {}
     axis = data.get('axis', 'x')
     pct  = float(data.get('pct', 50))
 
     if axis == 'x':
         pulse = state['x_min'] + (state['x_max'] - state['x_min']) * pct / 100
+        diff = pulse - state['x_pulse']
+        if state['lim_left'] and diff < 0:
+            return jsonify({'ok': False, 'msg': 'X 軸左側限位'})
+        if state['lim_right'] and diff > 0:
+            return jsonify({'ok': False, 'msg': 'X 軸右側限位'})
         set_servo_pulse('x', int(pulse))
     elif axis in ('y', 'y1'):
         pulse = state['y_min'] + (state['y_max'] - state['y_min']) * pct / 100
+        diff = pulse - state['y1_pulse']
+        if state['lim_up'] and diff > 0:
+            return jsonify({'ok': False, 'msg': 'Y 軸上側限位'})
+        if state['lim_down'] and diff < 0:
+            return jsonify({'ok': False, 'msg': 'Y 軸下側限位'})
         set_servo_pulse('y1', int(pulse))
         if state['y_sync']:
             set_servo_pulse('y2', int(pulse))
     elif axis == 'y2':
         pulse = state['y_min'] + (state['y_max'] - state['y_min']) * pct / 100
+        diff = pulse - state['y2_pulse']
+        if state['lim_up'] and diff > 0:
+            return jsonify({'ok': False, 'msg': 'Y 軸上側限位'})
+        if state['lim_down'] and diff < 0:
+            return jsonify({'ok': False, 'msg': 'Y 軸下側限位'})
         set_servo_pulse('y2', int(pulse))
 
     return jsonify({'ok': True})
@@ -713,7 +764,14 @@ def api_stop():
     state['system_run'] = False
     state['pickup_active'] = False
     macro_running = False
-    add_history("系統停止", "warn")
+    # [修正2] E-STOP：立即將步進馬達目標位置設為當前位置，強制煞車
+    if x_stepper:
+        x_stepper.halt()
+    if y_stepper:
+        y_stepper.halt()
+    set_digital_output('vacuum', False)
+    set_digital_output('z_down', False)
+    add_history("系統緊急停止（重置數位輸出＋強制馬達煞車）", "warn")
     return jsonify({'ok': True})
 
 @app.route('/api/home', methods=['POST'])
@@ -748,74 +806,105 @@ def api_pickup():
     if not state['system_run']:
         return jsonify({'ok': False, 'msg': '系統未啟動'})
 
+    def _wait_motor_reach(motor, target, tolerance=10, timeout=10.0):
+        """[修正3] 等待步進馬達抵達目標位置，並支援 system_run / timeout 中斷"""
+        start = time.time()
+        while state['pickup_active'] and state['system_run']:
+            if motor is None or abs(motor.current_pos - target) < tolerance:
+                return True
+            if time.time() - start > timeout:
+                add_history(f"自動取件警告：馬達到位超時（目標={target}µs，當前={motor.current_pos:.0f}µs）", "warn")
+                return False
+            time.sleep(0.05)
+        return False  # 被 STOP 中斷
+
     def pickup_sequence():
         state['pickup_active'] = True
         add_history("自動取件程序開始", "success")
         try:
             # 1. 系統初始化
             socketio.emit('pickup_step', {'step': 'init'})
-            time.sleep(0.5)
+            # [修正3] 每步前先確認系統仍在運行，遇到 STOP 立刻跳出
+            if not state['system_run']: return
+            time.sleep(0.3)
 
             # 2. 回原點
+            if not state['system_run']: return
             socketio.emit('pickup_step', {'step': 'home1'})
             home_axis('all')
-            time.sleep(1.0)
+            # [修正3] 等待馬達實際到位再繼續
+            _wait_motor_reach(x_stepper, PULSE_CENTER, timeout=15.0)
+            time.sleep(0.3)
 
             # 3. 確認模具
+            if not state['system_run']: return
             socketio.emit('pickup_step', {'step': 'check-mold'})
-            time.sleep(0.8)
+            time.sleep(0.5)
 
-            # 4. 移動到模具一
+            # 4. 移動到模具一（[修正3] 到位輪詢取代固定 sleep）
+            if not state['system_run']: return
             socketio.emit('pickup_step', {'step': 'move-mold1'})
             x_pickup = state['x_max'] - 200
             set_servo_pulse('x', x_pickup)
-            time.sleep(0.8)
+            add_history(f"移動至取料點: {x_pickup}µs", "info")
+            if not _wait_motor_reach(x_stepper, x_pickup): return
 
             # 5. 手臂下降與磁吸工件
+            if not state['system_run']: return
             set_digital_output('z_down', True)
             add_history("手臂下降中", "info")
-            time.sleep(1.0)
+            time.sleep(0.8)  # 繼電器動作時間固定等待
 
+            if not state['system_run']: return
             socketio.emit('pickup_step', {'step': 'suck'})
             set_digital_output('vacuum', True)
             add_history("吸盤開啟並吸附工件", "info")
             time.sleep(0.5)
 
             # 6. 確認已磁吸？
+            if not state['system_run']: return
             socketio.emit('pickup_step', {'step': 'check-suck'})
-            time.sleep(0.8)
+            time.sleep(0.5)
 
             # 7. 手臂上升與移動到模具二
+            if not state['system_run']: return
             set_digital_output('z_down', False)
             add_history("吸附成功，手臂上升", "info")
-            time.sleep(0.8)
+            time.sleep(0.5)
 
+            # [修正3] 到位輪詢
+            if not state['system_run']: return
             socketio.emit('pickup_step', {'step': 'move-mold2'})
             x_place = state['x_min'] + 200
             set_servo_pulse('x', x_place)
-            time.sleep(0.8)
+            add_history(f"移動至放料點: {x_place}µs", "info")
+            if not _wait_motor_reach(x_stepper, x_place): return
 
             # 8. 手臂下降與放下工件
+            if not state['system_run']: return
             set_digital_output('z_down', True)
             add_history("到達放料點，手臂下降", "info")
             time.sleep(0.8)
 
+            if not state['system_run']: return
             socketio.emit('pickup_step', {'step': 'drop'})
             set_digital_output('vacuum', False)
             add_history("吸盤關閉，工件已釋放", "info")
             time.sleep(0.5)
 
             # 9. 確認已放下？
+            if not state['system_run']: return
             socketio.emit('pickup_step', {'step': 'check-drop'})
-            time.sleep(0.8)
+            time.sleep(0.5)
 
             # 10. 回原點
+            if not state['system_run']: return
             set_digital_output('z_down', False)
-            time.sleep(0.5)
+            time.sleep(0.3)
 
             socketio.emit('pickup_step', {'step': 'home2'})
             set_servo_pulse('x', PULSE_CENTER)
-            time.sleep(0.5)
+            _wait_motor_reach(x_stepper, PULSE_CENTER)
             add_history("自動取件程序完成，回到起點", "success")
         except Exception as e:
             state['error'] = True
@@ -996,19 +1085,30 @@ def on_disconnect():
 
 @socketio.on('cmd_move')
 def on_cmd_move(data):
-    """WebSocket 移動命令（低延遲）"""
+    """WebSocket 移動命令（低延遲）
+    [修正4] 新增 y2 分支，避免傳入 y2 時被默默忽略。
+    ⚠️ 注意：目前後端只有一個 y_stepper 實體，y1/y2 同步至相同硬體軸。
+       若未來需要真正獨立驅動 Y1/Y2，需新增第二個 StepperMotor 實體。
+    """
     axis  = data.get('axis', 'x')
     delta = int(data.get('delta', 0))
     if state['system_run']:
-        with app.test_request_context():
-            pass
         if axis == 'x':
+            if state['lim_left'] and delta < 0:
+                return
+            if state['lim_right'] and delta > 0:
+                return
             new_pulse = max(state['x_min'], min(state['x_max'], state['x_pulse'] + delta))
             set_servo_pulse('x', new_pulse)
-        elif axis in ('y', 'y1'):
+        elif axis in ('y', 'y1', 'y2'):  # [修正4] 加入 y2 分支
+            if state['lim_down'] and delta < 0:
+                return
+            if state['lim_up'] and delta > 0:
+                return
             new_pulse = max(state['y_min'], min(state['y_max'], state['y1_pulse'] + delta))
             set_servo_pulse('y1', new_pulse)
-            if state['y_sync']:
+            # y_sync 開啟時或明確指定 y/y2 時同步 y2
+            if state['y_sync'] or axis in ('y', 'y2'):
                 set_servo_pulse('y2', new_pulse)
 
 # ── 主程式 ────────────────────────────────────────────────────────

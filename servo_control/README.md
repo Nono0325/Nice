@@ -48,35 +48,47 @@ python servo_controller.py
 
 ---
 
-## 🔌 硬體接線（BCM 編號）
+## 🔌 硬體接線（BCM 編號）- 步進馬達配置
 
-| 功能 | GPIO | 實體腳位 | 說明 |
-|------|------|----------|------|
-| **X 軸馬達** | GPIO 12 | Pin 32 | Hardware PWM0 |
-| **Y1 軸馬達** | GPIO 13 | Pin 33 | Hardware PWM1 |
-| **Y2 軸馬達** | GPIO 18 | Pin 12 | Hardware PWM0 (ALT) |
-| **吸盤繼電器** | GPIO 24 | Pin 18 | 數位輸出 HIGH=ON |
-| **Z_DOWN 繼電器** | GPIO 25 | Pin 22 | 數位輸出 HIGH=ON |
-| **限位 LEFT** | GPIO 17 | Pin 11 | INPUT_PULLUP（觸發=LOW） |
-| **限位 RIGHT** | GPIO 27 | Pin 13 | INPUT_PULLUP |
-| **限位 UP** | GPIO 22 | Pin 15 | INPUT_PULLUP |
-| **限位 DOWN** | GPIO 23 | Pin 16 | INPUT_PULLUP |
-| GND | GND | Pin 6/9 | 接地 |
-| 5V | 5V | Pin 2/4 | 馬達電源（建議外接） |
+| 功能 | GPIO | 說明 |
+|------|------|------|
+| **X_PUL 步進脈衝** | GPIO 12 | X 軸步進馬達脈衝輸入 |
+| **X_DIR 步進方向** | GPIO 16 | X 軸步進馬達方向輸入 |
+| **X_ENA 步進致能** | GPIO 20 | X 軸步進馬達致能（LOW=啟動, HIGH=釋放）|
+| **Y_PUL 步進脈衝** | GPIO 13 | Y 軸步進脈衝輸入 |
+| **Y_DIR 步進方向** | GPIO 19 | Y 軸步進方向輸入 |
+| **Y_ENA 步進致能** | GPIO 26 | Y 軸步進致能（LOW=啟動, HIGH=釋放）|
+| **吸盤繼電器** | GPIO 24 | 數位輸出 HIGH=ON |
+| **Z_DOWN 繼電器** | GPIO 25 | 數位輸出 HIGH=ON |
+| **限位 LEFT** | GPIO 17 | INPUT_PULLUP（觸發=LOW） |
+| **限位 RIGHT** | GPIO 27 | INPUT_PULLUP |
+| **限位 UP** | GPIO 22 | INPUT_PULLUP |
+| **限位 DOWN** | GPIO 23 | INPUT_PULLUP |
+| GND | GND | 接地 |
+| 5V | 5V | 馬達電源（建議外接） |
 
-> ⚠️ 伺服馬達電流需求較大，建議使用**外部 5V 電源**供電，不要從 Pi GPIO 直接取電。
+> ⚠️ Y1/Y2 目前共用同一組 Y_PUL/DIR/ENA 引腳（即同一個步進馬達實體）。
+> 若需真正獨立驅動 Y1/Y2，請為 Y2 新增獨立的 PUL/DIR/ENA GPIO 並建立第二個 StepperMotor 實體。
+
+> ⚠️ 步進馬達電流需求較大，建議使用**外部 5V/24V 電源**供電，不要從 Pi GPIO 直接取電。
 
 ---
 
-## 📐 PWM 規格
+## 📐 位置單位說明
 
 | 參數 | 數值 |
 |------|------|
-| 頻率 | **50 Hz** |
-| 週期 | 20 ms |
-| 最小脈衝（LEFT/DOWN） | **500 µs** → 2.5% Duty |
-| 中心位置（IDLE） | **1500 µs** → 7.5% Duty |
-| 最大脈衝（RIGHT/UP） | **2500 µs** → 12.5% Duty |
+| 位置表示方式 | **虛擬 µs 單元** (500 ~ 2500)，對應步進馬達行程 |
+| 最小位置（LEFT/DOWN） | **500 µs** = 行程 0% |
+| 中心位置（IDLE/HOME） | **1500 µs** = 行程 50% |
+| 最大位置（RIGHT/UP） | **2500 µs** = 行程 100% |
+| 比例換算 | 預設 10 µs = 1 mm（可在範圍設定頁調整）|
+
+> ℹ️ 注意：系統已從伺服 PWM 升級為**步進馬達 PUL/DIR/ENA** 控制器。
+> 「µs」數值為 UI 顯示用的虛擬位置單元，並非實際脈衝寬度輸出。
+> 步進馬達脈衝頻率由 StepperMotor 類別內的加減速演算法動態計算。
+> ⚠️ Python `time.sleep()` 在非即時 Kernel 下精度有限（~1ms），
+> 最大穩定脈衝頻率建議設定為 ≤500Hz。正式量產建議改用 `pigpio` DMA 硬體脈衝。
 
 ---
 

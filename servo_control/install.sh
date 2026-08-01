@@ -1,157 +1,154 @@
 #!/bin/bash
 # ================================================================
-#  璅寞?瘣曆撩?收??嗥頂蝯?- 銝?萄?鋆??#  Raspberry Pi Servo Motor Controller - One-Click Installer
+#  Raspberry Pi Stepper Motor Controller - One-Click Installer
 #
-#  雿輻?孵? / Usage:
-#    curl -fsSL https://raw.githubusercontent.com/Nono0325/Nice/main/servo_control/install.sh | bash
-#  ??/ or:
-#    wget -qO- https://raw.githubusercontent.com/Nono0325/Nice/main/servo_control/install.sh | bash
+#  Usage:
+#    curl -fsSL https://raw.githubusercontent.com/Nono0325/Nice/main/servo_control/install.sh | sudo bash
+#  or:
+#    wget -qO- https://raw.githubusercontent.com/Nono0325/Nice/main/servo_control/install.sh | sudo bash
 # ================================================================
 
-set -e  # ??航炊蝡?迫
+set -e  # exit on error
 
-# ?? 憿頛詨 ??????????????????????????????????????????????????
+# ── Color definitions ──────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
-log_info()    { echo -e "${CYAN}[INFO]${NC}  $1"; }
-log_ok()      { echo -e "${GREEN}[  OK]${NC}  $1"; }
-log_warn()    { echo -e "${YELLOW}[WARN]${NC}  $1"; }
-log_error()   { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
-log_step()    { echo -e "\n${BOLD}${GREEN}??$1${NC}"; }
+log_info()  { echo -e "${CYAN}[INFO]${NC}  $1"; }
+log_ok()    { echo -e "${GREEN}[  OK]${NC}  $1"; }
+log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $1"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+log_step()  { echo -e "\n${BOLD}${GREEN}>>> $1${NC}"; }
 
-# ?? 閮剖? ??????????????????????????????????????????????????????
+# ── Configuration ──────────────────────────────────────────────
 REPO_URL="https://github.com/Nono0325/Nice.git"
 INSTALL_DIR="/home/${SUDO_USER:-pi}/servo_control"
 SERVICE_NAME="servo-control"
 PYTHON_CMD="python3"
 PORT=5000
 
-# ?? 璅?璈怠? ??????????????????????????????????????????????????
+# ── Banner ─────────────────────────────────────────────────────
 echo ""
-echo -e "${BOLD}${CYAN}????????????????????????????????????????????????????????${NC}"
-echo -e "${BOLD}${CYAN}??      璅寞?瘣曆撩?收??嗥頂蝯?- 銝?萄?鋆?            ??{NC}"
-echo -e "${BOLD}${CYAN}??  Raspberry Pi Servo Motor Controller Installer      ??{NC}"
-echo -e "${BOLD}${CYAN}????????????????????????????????????????????????????????${NC}"
+echo -e "${BOLD}${CYAN}========================================================${NC}"
+echo -e "${BOLD}${CYAN}||   Raspberry Pi Stepper Motor Controller Installer  ||${NC}"
+echo -e "${BOLD}${CYAN}========================================================${NC}"
 echo ""
 
-# ?? 瑼Ｘ root 甈? ????????????????????????????????????????????
+# ── Check for root / sudo ──────────────────────────────────────
 if [ "$EUID" -ne 0 ]; then
-    log_warn "撱箄降隞?sudo ?瑁?隞亥身摰?systemd ??"
-    log_warn "憒??瑁?蝔?嚗??芸???嚗??舐?亙銵?
+    log_warn "Not running as root. systemd service setup will be skipped."
+    log_warn "Re-run with sudo for full installation."
 fi
 
-# ?? ?菜葫蝟餌絞 ?????????????????????????????????????????????????
-log_step "?菜葫蝟餌絞?啣?"
+# ── Detect platform ────────────────────────────────────────────
+log_step "Detecting platform"
 
 IS_PI=false
 if grep -q "Raspberry Pi" /proc/cpuinfo 2>/dev/null || grep -q "BCM" /proc/cpuinfo 2>/dev/null; then
     IS_PI=true
-    PI_MODEL=$(cat /proc/cpuinfo | grep "Model" | head -1 | awk -F: '{print $2}' | xargs)
-    log_ok "?菜葫??Raspberry Pi: ${PI_MODEL}"
+    PI_MODEL=$(grep "Model" /proc/cpuinfo | head -1 | awk -F: '{print $2}' | xargs)
+    log_ok "Detected Raspberry Pi: ${PI_MODEL}"
 else
-    log_warn "??Raspberry Pi ?啣?嚗?雿輻璅⊥ GPIO 璅∪?"
+    log_warn "Not running on Raspberry Pi - GPIO features will be simulated."
 fi
 
-OS_ID=$(cat /etc/os-release 2>/dev/null | grep "^ID=" | cut -d= -f2 | tr -d '"')
-log_info "雿平蝟餌絞: ${OS_ID:-unknown}"
+OS_ID=$(grep "^ID=" /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"')
+log_info "OS: ${OS_ID:-unknown}"
 
-# ?? 摰?蝟餌絞靘陷 ??????????????????????????????????????????????
-log_step "摰?蝟餌絞靘陷"
+# ── Install system packages ────────────────────────────────────
+log_step "Installing system packages"
 
 if command -v apt-get &>/dev/null; then
-    log_info "?湔憟辣皜..."
+    log_info "Updating package list..."
     apt-get update -qq
 
-    log_info "摰? Python3 / pip / git..."
+    log_info "Installing Python3 / pip / git..."
     apt-get install -y -qq python3 python3-pip python3-venv git curl 2>/dev/null
 
     if [ "$IS_PI" = true ]; then
-        log_info "摰?璅寞?瘣?GPIO 靘陷..."
+        log_info "Installing Raspberry Pi GPIO libraries..."
         apt-get install -y -qq python3-rpi.gpio pigpio python3-pigpio 2>/dev/null || true
     fi
-    log_ok "蝟餌絞靘陷摰?摰?"
+    log_ok "System packages installed"
 else
-    log_warn "??apt 蝟餌絞嚗歲?頂蝯曹?鞈游?鋆?
+    log_warn "apt not found - skipping system package installation"
 fi
 
-# ?? ?? / ?湔蝔?蝣??????????????????????????????????????????
-log_step "??蝔?蝣?
+# ── Clone or update repository ────────────────────────────────
+log_step "Cloning / updating repository"
 
 if [ -d "$INSTALL_DIR" ]; then
-    log_info "?桅?撌脣??剁??湔銝? ${INSTALL_DIR}"
+    log_info "Directory exists, pulling latest: ${INSTALL_DIR}"
     cd "$INSTALL_DIR"
     git pull origin main 2>/dev/null || git pull origin master 2>/dev/null || true
-    log_ok "蝔?蝣澆歇?湔"
+    log_ok "Repository updated"
 else
-    log_info "???脣?摨? ${REPO_URL}"
-    # ??摰 repo嚗敺?鋆?servo_control ?桅?
+    log_info "Cloning from ${REPO_URL}"
     TMP_DIR=$(mktemp -d)
     git clone --depth=1 "$REPO_URL" "$TMP_DIR/repo"
-    
+
     if [ -d "$TMP_DIR/repo/servo_control" ]; then
         cp -r "$TMP_DIR/repo/servo_control" "$INSTALL_DIR"
-        log_ok "servo_control ?桅?撌脣?鋆: ${INSTALL_DIR}"
+        log_ok "servo_control directory installed to: ${INSTALL_DIR}"
     else
-        # 憒??游?repo 撠望 servo_control
         cp -r "$TMP_DIR/repo" "$INSTALL_DIR"
-        log_ok "蝔?蝣澆歇摰??? ${INSTALL_DIR}"
+        log_ok "Repository installed to: ${INSTALL_DIR}"
     fi
     rm -rf "$TMP_DIR"
 fi
 
 cd "$INSTALL_DIR"
 
-# ?? 撱箇? Python ??啣? ??????????????????????????????????????
-log_step "撱箇? Python ??啣?"
+# ── Create Python virtual environment ─────────────────────────
+log_step "Setting up Python virtual environment"
 
 if [ ! -d "$INSTALL_DIR/venv" ]; then
     $PYTHON_CMD -m venv "$INSTALL_DIR/venv"
-    log_ok "??啣?撱箇?摰?"
+    log_ok "Virtual environment created"
 else
-    log_info "??啣?撌脣???
+    log_info "Virtual environment already exists"
 fi
 
-# ????啣?
+# Activate venv
 source "$INSTALL_DIR/venv/bin/activate"
 
-# ?? 摰? Python 靘陷 ??????????????????????????????????????????
-log_step "摰? Python 靘陷"
+# ── Install Python dependencies ────────────────────────────────
+log_step "Installing Python dependencies"
 
 pip install --upgrade pip -q
 pip install flask flask-socketio eventlet -q
 
 if [ "$IS_PI" = true ]; then
-    log_info "摰?璅寞?瘣?GPIO ?賢?摨?.."
-    pip install RPi.GPIO -q 2>/dev/null || log_warn "RPi.GPIO 摰?憭望?嚗?雿輻璅⊥璅∪?"
+    log_info "Installing Raspberry Pi GPIO Python packages..."
+    pip install RPi.GPIO -q 2>/dev/null || log_warn "RPi.GPIO install failed - GPIO will be simulated"
     pip install pigpio -q 2>/dev/null || true
 fi
 
-log_ok "Python 靘陷摰?摰?"
+log_ok "Python dependencies installed"
 
-# ?? 閮剖?甈? ??????????????????????????????????????????????????
-log_step "閮剖?瑼?甈?"
+# ── Fix file permissions ───────────────────────────────────────
+log_step "Setting file permissions"
 chmod +x "$INSTALL_DIR/start.sh" 2>/dev/null || true
 chown -R "${SUDO_USER:-pi}:${SUDO_USER:-pi}" "$INSTALL_DIR" 2>/dev/null || true
-log_ok "甈?閮剖?摰?"
+log_ok "Permissions set"
 
-# ?? 閮剖? pigpio ??嚗?璅寞?瘣橘??????????????????????????????
+# ── Enable pigpiod service (Pi only) ──────────────────────────
 if [ "$IS_PI" = true ] && [ "$EUID" -eq 0 ]; then
-    log_step "閮剖? pigpio ??"
+    log_step "Enabling pigpio daemon"
     systemctl enable pigpiod 2>/dev/null || true
     systemctl start pigpiod 2>/dev/null || true
-    log_ok "pigpio ??撌脣???
+    log_ok "pigpio daemon enabled"
 fi
 
-# ?? 撱箇? systemd ??嚗?璈?銵?????????????????????????
+# ── Create and enable systemd service ────────────────────────
 if [ "$EUID" -eq 0 ]; then
-    log_step "閮剖????芸??瑁? (systemd)"
+    log_step "Installing systemd service (auto-start on boot)"
 
     RUN_USER="${SUDO_USER:-pi}"
 
     cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
-Description=璅寞?瘣曆撩?收??嗥頂蝯?(Servo Motor Controller)
+Description=Raspberry Pi Stepper Motor Controller
 Documentation=https://github.com/Nono0325/Nice
 After=network.target pigpiod.service
 Wants=network.target
@@ -178,36 +175,35 @@ EOF
     sleep 2
 
     if systemctl is-active --quiet ${SERVICE_NAME}; then
-        log_ok "systemd ??撌脣???閮剔???芸??瑁?"
+        log_ok "systemd service started - auto-start enabled"
     else
-        log_warn "????憭望?嚗??瑁?: sudo journalctl -u ${SERVICE_NAME} -n 20"
+        log_warn "Service may have failed. Check: sudo journalctl -u ${SERVICE_NAME} -n 20"
     fi
 else
-    log_warn "??root 甈?嚗歲??systemd 閮剖?"
-    log_warn "憒????芸??瑁?嚗?隞?sudo ??瑁?甇方??
+    log_warn "Not root - skipping systemd service installation"
+    log_warn "To enable auto-start, re-run with sudo"
 fi
 
-# ?? ?? IP 雿? ??????????????????????????????????????????????
+# ── Print summary ──────────────────────────────────────────────
 IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 HOSTNAME=$(hostname 2>/dev/null)
 
-# ?? 摰? ?????????????????????????????????????????????????????
 echo ""
-echo -e "${BOLD}${GREEN}????????????????????????????????????????????????????????${NC}"
-echo -e "${BOLD}${GREEN}??             ?? 摰?摰?嚗?                         ??{NC}"
-echo -e "${BOLD}${GREEN}????????????????????????????????????????????????????????${NC}"
+echo -e "${BOLD}${GREEN}========================================================${NC}"
+echo -e "${BOLD}${GREEN}||              Installation Complete!               ||${NC}"
+echo -e "${BOLD}${GREEN}========================================================${NC}"
 echo ""
-echo -e "  ?? 摰??桅?: ${CYAN}${INSTALL_DIR}${NC}"
-echo -e "  ?? ?祆?閮芸?: ${CYAN}http://localhost:${PORT}${NC}"
-[ -n "$IP" ] && echo -e "  ?? ??雯頝? ${CYAN}http://${IP}:${PORT}${NC}"
+echo -e "  Install directory : ${CYAN}${INSTALL_DIR}${NC}"
+echo -e "  Local URL         : ${CYAN}http://localhost:${PORT}${NC}"
+[ -n "$IP" ] && echo -e "  Network URL       : ${CYAN}http://${IP}:${PORT}${NC}"
 echo ""
-echo -e "  ${BOLD}撣貊?誘:${NC}"
-echo -e "  ????:     ${YELLOW}cd ${INSTALL_DIR} && ./start.sh${NC}"
+echo -e "  ${BOLD}Useful commands:${NC}"
+echo -e "  Manual start   : ${YELLOW}cd ${INSTALL_DIR} && ./start.sh${NC}"
 if [ "$EUID" -eq 0 ]; then
-    echo -e "  ?亦????     ${YELLOW}sudo systemctl status ${SERVICE_NAME}${NC}"
-    echo -e "  ?亦??亥?:     ${YELLOW}sudo journalctl -u ${SERVICE_NAME} -f${NC}"
-    echo -e "  ?迫??:     ${YELLOW}sudo systemctl stop ${SERVICE_NAME}${NC}"
-    echo -e "  ????:     ${YELLOW}sudo systemctl restart ${SERVICE_NAME}${NC}"
-    echo -e "  ???芸???: ${YELLOW}sudo systemctl disable ${SERVICE_NAME}${NC}"
+    echo -e "  Service status : ${YELLOW}sudo systemctl status ${SERVICE_NAME}${NC}"
+    echo -e "  Live logs      : ${YELLOW}sudo journalctl -u ${SERVICE_NAME} -f${NC}"
+    echo -e "  Stop service   : ${YELLOW}sudo systemctl stop ${SERVICE_NAME}${NC}"
+    echo -e "  Restart        : ${YELLOW}sudo systemctl restart ${SERVICE_NAME}${NC}"
+    echo -e "  Disable boot   : ${YELLOW}sudo systemctl disable ${SERVICE_NAME}${NC}"
 fi
 echo ""
