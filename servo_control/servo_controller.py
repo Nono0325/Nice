@@ -370,30 +370,34 @@ def home_axis(axis='all'):
                 GPIO.output(x_stepper.ena_pin, GPIO.LOW)
                 GPIO.output(x_stepper.dir_pin, GPIO.LOW)  # 負方向向左
                 
+                homing_speed_hz = 1000.0
+                delay = 1.0 / homing_speed_hz
                 steps = 0
                 max_steps = 15000  # 安全最大脈衝數，防止無極限開關或訊號異常時無限迴圈卡死
+                
                 while steps < max_steps:
-                    read_limit_switches()
-                    if state['lim_left']:
+                    if not GPIO.input(PIN['LIM_LEFT']):  # 低電位觸發 (PUD_UP)
+                        state['lim_left'] = True
                         break
-                    # 發送單步脈衝
+                    # 高速單步脈衝
                     GPIO.output(x_stepper.pul_pin, GPIO.HIGH)
-                    time.sleep(1.0 / (2.0 * x_stepper.min_speed_hz))
                     GPIO.output(x_stepper.pul_pin, GPIO.LOW)
-                    time.sleep(1.0 / (2.0 * x_stepper.min_speed_hz))
+                    time.sleep(delay)
                     steps += 1
                 
                 if steps >= max_steps:
                     add_history("X 軸歸零警告: 超時未觸發現位開關", "warn")
                     print("[HOME] Warning: X axis homing step limit reached")
+                else:
+                    add_history("X 軸觸發現位開關", "info")
 
-                # 退開限位開關 (Back-off)，確保離開觸發狀態
+                # 退開限位開關 (Back-off 250 步 ~50µs 行程)，確保離開觸發狀態
                 GPIO.output(x_stepper.dir_pin, GPIO.HIGH)  # 正方向向右
-                for _ in range(500):  # 退開約 100 µs 行程
+                backoff_delay = 1.0 / 500.0
+                for _ in range(250):
                     GPIO.output(x_stepper.pul_pin, GPIO.HIGH)
-                    time.sleep(1.0 / (2.0 * x_stepper.min_speed_hz))
                     GPIO.output(x_stepper.pul_pin, GPIO.LOW)
-                    time.sleep(1.0 / (2.0 * x_stepper.min_speed_hz))
+                    time.sleep(backoff_delay)
 
                 x_stepper.set_position(state['x_min'])
             finally:
@@ -402,10 +406,12 @@ def home_axis(axis='all'):
         else:
             if x_stepper:
                 x_stepper.set_position(state['x_min'])
-            time.sleep(0.3)
+            time.sleep(0.2)
             
         if x_stepper:
-            x_stepper.set_target(PULSE_CENTER)
+            # [修復重點] 歸零完成後停在原點 x_min (500us/0%)，不再自動彈回 1500us 中心點
+            x_stepper.set_target(state['x_min'])
+            add_history("X 軸歸零完成 (已回原點 0%)", "success")
 
     if axis in ('y', 'all'):
         print("[HOME] Y Axis homing...")
@@ -418,30 +424,34 @@ def home_axis(axis='all'):
                 GPIO.output(y_stepper.ena_pin, GPIO.LOW)
                 GPIO.output(y_stepper.dir_pin, GPIO.LOW)  # 負方向向下
                 
+                homing_speed_hz = 1000.0
+                delay = 1.0 / homing_speed_hz
                 steps = 0
                 max_steps = 15000
+                
                 while steps < max_steps:
-                    read_limit_switches()
-                    if state['lim_down']:
+                    if not GPIO.input(PIN['LIM_DOWN']):  # 低電位觸發
+                        state['lim_down'] = True
                         break
-                    # 發送單步脈衝
+                    # 高速單步脈衝
                     GPIO.output(y_stepper.pul_pin, GPIO.HIGH)
-                    time.sleep(1.0 / (2.0 * y_stepper.min_speed_hz))
                     GPIO.output(y_stepper.pul_pin, GPIO.LOW)
-                    time.sleep(1.0 / (2.0 * y_stepper.min_speed_hz))
+                    time.sleep(delay)
                     steps += 1
                 
                 if steps >= max_steps:
                     add_history("Y 軸歸零警告: 超時未觸發現位開關", "warn")
                     print("[HOME] Warning: Y axis homing step limit reached")
+                else:
+                    add_history("Y 軸觸發現位開關", "info")
 
-                # 退開限位開關 (Back-off)
+                # 退開限位開關 (Back-off 250 步)
                 GPIO.output(y_stepper.dir_pin, GPIO.HIGH)  # 正方向向上
-                for _ in range(500):
+                backoff_delay = 1.0 / 500.0
+                for _ in range(250):
                     GPIO.output(y_stepper.pul_pin, GPIO.HIGH)
-                    time.sleep(1.0 / (2.0 * y_stepper.min_speed_hz))
                     GPIO.output(y_stepper.pul_pin, GPIO.LOW)
-                    time.sleep(1.0 / (2.0 * y_stepper.min_speed_hz))
+                    time.sleep(backoff_delay)
 
                 y_stepper.set_position(state['y_min'])
             finally:
@@ -450,10 +460,12 @@ def home_axis(axis='all'):
         else:
             if y_stepper:
                 y_stepper.set_position(state['y_min'])
-            time.sleep(0.3)
+            time.sleep(0.2)
             
         if y_stepper:
-            y_stepper.set_target(PULSE_CENTER)
+            # [修復重點] 歸零完成後停在原點 y_min (500us/0%)，不再自動彈回 1500us 中心點
+            y_stepper.set_target(state['y_min'])
+            add_history("Y 軸歸零完成 (已回原點 0%)", "success")
 
 # ── 背景廣播執行緒 ────────────────────────────────────────────────
 broadcast_lock = threading.Lock()
