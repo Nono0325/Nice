@@ -212,19 +212,15 @@ class StepperMotor:
                 
                 # 限位開關安全防護
                 if diff < 0 and self.name == 'x' and state['lim_left']:
-                    self.target_pos = self.current_pos
                     time.sleep(0.01)
                     continue
                 if diff > 0 and self.name == 'x' and state['lim_right']:
-                    self.target_pos = self.current_pos
                     time.sleep(0.01)
                     continue
                 if diff < 0 and self.name == 'y' and state['lim_down']:
-                    self.target_pos = self.current_pos
                     time.sleep(0.01)
                     continue
                 if diff > 0 and self.name == 'y' and state['lim_up']:
-                    self.target_pos = self.current_pos
                     time.sleep(0.01)
                     continue
 
@@ -374,7 +370,9 @@ def home_axis(axis='all'):
                 GPIO.output(x_stepper.ena_pin, GPIO.LOW)
                 GPIO.output(x_stepper.dir_pin, GPIO.LOW)  # 負方向向左
                 
-                while True:
+                steps = 0
+                max_steps = 15000  # 安全最大脈衝數，防止無極限開關或訊號異常時無限迴圈卡死
+                while steps < max_steps:
                     read_limit_switches()
                     if state['lim_left']:
                         break
@@ -383,15 +381,28 @@ def home_axis(axis='all'):
                     time.sleep(1.0 / (2.0 * x_stepper.min_speed_hz))
                     GPIO.output(x_stepper.pul_pin, GPIO.LOW)
                     time.sleep(1.0 / (2.0 * x_stepper.min_speed_hz))
+                    steps += 1
                 
+                if steps >= max_steps:
+                    add_history("X 軸歸零警告: 超時未觸發現位開關", "warn")
+                    print("[HOME] Warning: X axis homing step limit reached")
+
+                # 退開限位開關 (Back-off)，確保離開觸發狀態
+                GPIO.output(x_stepper.dir_pin, GPIO.HIGH)  # 正方向向右
+                for _ in range(500):  # 退開約 100 µs 行程
+                    GPIO.output(x_stepper.pul_pin, GPIO.HIGH)
+                    time.sleep(1.0 / (2.0 * x_stepper.min_speed_hz))
+                    GPIO.output(x_stepper.pul_pin, GPIO.LOW)
+                    time.sleep(1.0 / (2.0 * x_stepper.min_speed_hz))
+
                 x_stepper.set_position(state['x_min'])
             finally:
-                # [修正1] 無論是否發生例外，都要恢復背景執行緒
+                # [修正1] 無論是否發生例外或超時，都要恢復背景執行緒
                 x_stepper.pause_for_homing = False
         else:
             if x_stepper:
                 x_stepper.set_position(state['x_min'])
-            time.sleep(0.5)
+            time.sleep(0.3)
             
         if x_stepper:
             x_stepper.set_target(PULSE_CENTER)
@@ -407,7 +418,9 @@ def home_axis(axis='all'):
                 GPIO.output(y_stepper.ena_pin, GPIO.LOW)
                 GPIO.output(y_stepper.dir_pin, GPIO.LOW)  # 負方向向下
                 
-                while True:
+                steps = 0
+                max_steps = 15000
+                while steps < max_steps:
                     read_limit_switches()
                     if state['lim_down']:
                         break
@@ -416,7 +429,20 @@ def home_axis(axis='all'):
                     time.sleep(1.0 / (2.0 * y_stepper.min_speed_hz))
                     GPIO.output(y_stepper.pul_pin, GPIO.LOW)
                     time.sleep(1.0 / (2.0 * y_stepper.min_speed_hz))
+                    steps += 1
                 
+                if steps >= max_steps:
+                    add_history("Y 軸歸零警告: 超時未觸發現位開關", "warn")
+                    print("[HOME] Warning: Y axis homing step limit reached")
+
+                # 退開限位開關 (Back-off)
+                GPIO.output(y_stepper.dir_pin, GPIO.HIGH)  # 正方向向上
+                for _ in range(500):
+                    GPIO.output(y_stepper.pul_pin, GPIO.HIGH)
+                    time.sleep(1.0 / (2.0 * y_stepper.min_speed_hz))
+                    GPIO.output(y_stepper.pul_pin, GPIO.LOW)
+                    time.sleep(1.0 / (2.0 * y_stepper.min_speed_hz))
+
                 y_stepper.set_position(state['y_min'])
             finally:
                 # [修正1] 恢復背景執行緒
@@ -424,7 +450,7 @@ def home_axis(axis='all'):
         else:
             if y_stepper:
                 y_stepper.set_position(state['y_min'])
-            time.sleep(0.5)
+            time.sleep(0.3)
             
         if y_stepper:
             y_stepper.set_target(PULSE_CENTER)
@@ -782,10 +808,12 @@ def api_stop():
     state['system_run'] = False
     state['pickup_active'] = False
     macro_running = False
-    # [修正2] E-STOP：立即將步進馬達目標位置設為當前位置，強制煞車
+    # [修正2] E-STOP：立即將步進馬達目標位置設為當前位置，強制煞車並解除歸零暫停
     if x_stepper:
+        x_stepper.pause_for_homing = False
         x_stepper.halt()
     if y_stepper:
+        y_stepper.pause_for_homing = False
         y_stepper.halt()
     set_digital_output('vacuum', False)
     set_digital_output('z_down', False)
@@ -1160,6 +1188,15 @@ def api_terminal_logout():
     if token in terminal_sessions:
         del terminal_sessions[token]
     return jsonify({'ok': True})
+
+@app.route('/api/terminal/check_token', methods=['POST'])
+def api_terminal_check_token():
+    """檢查 Token 是否仍有效"""
+    data = request.get_json(silent=True) or {}
+    token = data.get('token', '')
+    if is_valid_token(token):
+        return jsonify({'ok': True, 'valid': True})
+    return jsonify({'ok': False, 'valid': False})
 
 @app.route('/api/system_power', methods=['POST'])
 def api_system_power():

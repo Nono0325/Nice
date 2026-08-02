@@ -1308,6 +1308,21 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+async function checkTerminalAuthOnLoad() {
+  const token = sessionStorage.getItem('terminalToken');
+  if (token) {
+    const res = await apiPost('/api/terminal/check_token', { token });
+    if (res.ok && res.valid) {
+      terminalAuthToken = token;
+      updateTerminalUI(true);
+      return;
+    }
+  }
+  terminalAuthToken = "";
+  sessionStorage.removeItem('terminalToken');
+  updateTerminalUI(false);
+}
+
 // ── 初始化 ───────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   initCharts();
@@ -1316,6 +1331,18 @@ document.addEventListener('DOMContentLoaded', () => {
   loadHistory();
   loadMacros();
   drawGcodePath();
+  checkTerminalAuthOnLoad();
+
+  const pwdInput = document.getElementById('terminalAuthPassword');
+  if (pwdInput) {
+    pwdInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        unlockTerminal(e);
+      }
+    });
+  }
+
   addLog('系統介面載入完成', 'success');
   addLog('使用 ← → ↑ ↓ 方向鍵快速控制馬達', 'info');
   addLog('V=吸盤切換 | Z=手臂切換 | H=全部歸零', 'info');
