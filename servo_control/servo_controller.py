@@ -252,8 +252,9 @@ class StepperMotor:
 
                 step_delay = 1.0 / self.current_speed_hz
                 t_next = time.perf_counter() + step_delay
-                if step_delay > 0.0015:
-                    time.sleep(step_delay - 0.001)
+                # 先 sleep 釋放 GIL（保留最後 200µs 做忙等精準補正）
+                if step_delay > 0.0002:
+                    time.sleep(step_delay - 0.0002)
                 while time.perf_counter() < t_next:
                     pass
 
@@ -409,10 +410,10 @@ def _home_single_axis(axis_name):
                 steps += 1
                 stepper.current_pos = max(min_pos, stepper.current_pos - step_val)
                 
-                # 微秒高精度定時
+                # 先 sleep 釋放 GIL（保留最後 200µs 做忙等精準補正），避免長期佔用 GIL 凍結 SocketIO
                 t_rem = (t_step_start + step_interval) - time.perf_counter()
-                if t_rem > 0.0015:
-                    time.sleep(t_rem - 0.001)
+                if t_rem > 0.0002:
+                    time.sleep(t_rem - 0.0002)
                 while time.perf_counter() < (t_step_start + step_interval):
                     pass
             
@@ -433,9 +434,10 @@ def _home_single_axis(axis_name):
                     pass
                 GPIO.output(stepper.pul_pin, GPIO.LOW)
                 
+                # 先 sleep 釋放 GIL（保留最後 200µs 做忙等精準補正）
                 t_rem = (t_b_start + backoff_interval) - time.perf_counter()
-                if t_rem > 0.0015:
-                    time.sleep(t_rem - 0.001)
+                if t_rem > 0.0002:
+                    time.sleep(t_rem - 0.0002)
                 while time.perf_counter() < (t_b_start + backoff_interval):
                     pass
                     
@@ -803,8 +805,8 @@ def run_macro_loop(commands):
             if len(parts) >= 2:
                 axis = parts[1].lower()
             add_history(f"巨集指令: 馬達歸零 ({axis.upper()})", "info")
+            # home_axis() 內部 join() 確保完成後才返回，不需要額外 sleep
             home_axis(axis)
-            time.sleep(1.0)
             
         elif op == 'MSG':
             msg = " ".join(parts[1:])
@@ -905,8 +907,8 @@ def api_pickup():
             if not state['system_run']: return
             socketio.emit('pickup_step', {'step': 'home1'})
             home_axis('all')
-            # [修正3] 等待馬達實際到位再繼續
-            _wait_motor_reach(x_stepper, PULSE_CENTER, timeout=15.0)
+            # 歸零後位置是 x_min（500），等待到達 x_min 而非 PULSE_CENTER
+            _wait_motor_reach(x_stepper, state['x_min'], timeout=15.0)
             time.sleep(0.3)
 
             # 3. 確認模具

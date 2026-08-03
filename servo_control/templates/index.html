@@ -224,7 +224,7 @@
         </div>
         <div class="divider"></div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-primary" style="flex:1" onclick="cmdHome('x')">🏠 X 歸零</button>
+          <button class="btn btn-primary" id="btnHomeX" style="flex:1" onclick="cmdHome('x')">🏠 X 歸零</button>
         </div>
       </div>
 
@@ -252,7 +252,7 @@
         </div>
         <div class="divider"></div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-primary" style="flex:1" onclick="cmdHome('y')">🏠 Y 歸零</button>
+          <button class="btn btn-primary" id="btnHomeY" style="flex:1" onclick="cmdHome('y')">🏠 Y 歸零</button>
         </div>
       </div>
     </div>
@@ -288,9 +288,10 @@
         </button>
 
         <!-- 全部歸零 -->
-        <button class="btn btn-warning" style="padding:14px 24px;font-size:14px" onclick="cmdHome('all')">
+        <button class="btn btn-warning" id="btnHomeAll" style="padding:14px 24px;font-size:14px" onclick="cmdHome('all')">
           🏠 全部歸零
         </button>
+        <span id="homingIndicator" style="display:none;font-size:12px;color:var(--accent-amber);animation:pulse 0.8s infinite alternate">⏳ 歸零中...</span>
       </div>
     </div>
 

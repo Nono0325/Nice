@@ -378,6 +378,24 @@ function updateUI() {
   updateMotorTag('tagX',  s.x_pulse,  s.x_min,  s.x_max);
   updateMotorTag('tagY1', s.y1_pulse, s.y_min,  s.y_max);
   updateMotorTag('tagY2', s.y2_pulse, s.y_min,  s.y_max);
+
+  // 歸零中：禁用所有歸零按鈕防止重覆觸發
+  const homing = !!s.is_homing;
+  ['btnHomeX', 'btnHomeY', 'btnHomeAll'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.disabled = homing;
+      el.style.opacity = homing ? '0.5' : '';
+    }
+  });
+  if (homing) {
+    // 小型歸零狀態指示
+    const indicator = document.getElementById('homingIndicator');
+    if (indicator) indicator.style.display = 'inline';
+  } else {
+    const indicator = document.getElementById('homingIndicator');
+    if (indicator) indicator.style.display = 'none';
+  }
 }
 
 function updateMotorTag(id, pulse, min, max) {
@@ -450,8 +468,18 @@ async function cmdStop() {
 }
 
 async function cmdHome(axis) {
+  // 如果歸零已在執行中，拒絕重覆觸發
+  if (state.is_homing) {
+    toast('歸零執行中，請稍候...', 'warn');
+    return;
+  }
   const r = await apiPost('/api/home', { axis });
-  if (r.ok) { toast(`${axis.toUpperCase()} 軸歸零中...`, 'info'); addLog(`歸零: ${axis}`, 'info'); }
+  if (r.ok) {
+    toast(`${axis.toUpperCase()} 軸歸零中...`, 'info');
+    addLog(`歸零: ${axis}`, 'info');
+  } else if (r.msg) {
+    toast(r.msg, 'warn');
+  }
 }
 
 async function cmdPickup() {
@@ -1084,7 +1112,11 @@ async function runGcode() {
       }
     } else if (cmd === 'G28') {
       await apiPost('/api/home', { axis: 'all' });
-      await sleep(2000);
+      // 輪詢等待歸零完成，最多等 15 秒
+      for (let i = 0; i < 150 && gcodeRunning; i++) {
+        await sleep(100);
+        if (!state.is_homing) break;
+      }
       lastX = 0;
       lastY = 0;
     } else if (cmd === 'M106') {
