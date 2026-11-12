@@ -48,6 +48,9 @@
         <button v-if="telemetry.state === 'ESTOP' || telemetry.state === 'ALARM'" class="btn-reset-estop" @click="clearEStop">
           重置復歸
         </button>
+        <button class="btn-reset-estop" style="border-color: #7f1d1d; color: #f87171;" @click="runShutdown" title="安全關閉樹梅派電源">
+          ⏻ 關機
+        </button>
       </div>
     </header>
 
@@ -150,6 +153,81 @@
                 <button class="btn-home-sub" :disabled="telemetry.state === 'HOMING'" @click="triggerHoming('X')">
                   僅歸零 X 軸
                 </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 主控台即時感測器狀態快速監控面板 -->
+          <div class="card cockpit-sensor-card">
+            <div class="card-header">
+              <span class="card-title">📡 即時感測器狀態 (13 開關 + 2 驅動警報)</span>
+              <button class="pill-btn" @click="currentTab = 'sensors'">感測器詳細頁 ➔</button>
+            </div>
+            <div class="sensor-compact-grid">
+              <!-- X 軸行程接近開關 -->
+              <div class="sensor-compact-row">
+                <div class="sensor-compact-title">X 軸行程開關 (QN-1805-E1)</div>
+                <div class="sensor-pill-list">
+                  <div class="sensor-pill" :class="telemetry.sensors.x_left ? 'active' : 'inactive'"
+                       @click="toggleSimSensor('x_left')" :title="telemetry.is_simulation ? '點擊模擬觸發' : ''"
+                       :style="telemetry.is_simulation ? 'cursor:pointer' : ''">
+                    <span class="sensor-led-dot"></span>
+                    X_LEFT (原點/左限): {{ telemetry.sensors.x_left ? '● 導通觸發' : '○ 開路' }}
+                  </div>
+                  <div class="sensor-pill" :class="telemetry.sensors.x_mid ? 'active' : 'inactive'"
+                       @click="toggleSimSensor('x_mid')" :title="telemetry.is_simulation ? '點擊模擬觸發' : ''"
+                       :style="telemetry.is_simulation ? 'cursor:pointer' : ''">
+                    <span class="sensor-led-dot"></span>
+                    X_MID (中間到位): {{ telemetry.sensors.x_mid ? '● 導通觸發' : '○ 開路' }}
+                  </div>
+                  <div class="sensor-pill" :class="telemetry.sensors.x_right ? 'active' : 'inactive'"
+                       @click="toggleSimSensor('x_right')" :title="telemetry.is_simulation ? '點擊模擬觸發' : ''"
+                       :style="telemetry.is_simulation ? 'cursor:pointer' : ''">
+                    <span class="sensor-led-dot"></span>
+                    X_RIGHT (右極限): {{ telemetry.sensors.x_right ? '● 導通觸發' : '○ 開路' }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Z 軸開關 & 驅動 ALM -->
+              <div class="sensor-compact-row">
+                <div class="sensor-compact-title">Z 軸開關 & 2HSS86H 閉環驅動器警報</div>
+                <div class="sensor-pill-list">
+                  <div class="sensor-pill" :class="telemetry.sensors.z_up ? 'active' : 'inactive'"
+                       @click="toggleSimSensor('z_up')" :title="telemetry.is_simulation ? '點擊模擬觸發' : ''"
+                       :style="telemetry.is_simulation ? 'cursor:pointer' : ''">
+                    <span class="sensor-led-dot"></span>
+                    Z_UP (頂端原點): {{ telemetry.sensors.z_up ? '● 頂部觸發' : '○ 正常' }}
+                  </div>
+                  <div class="sensor-pill" :class="telemetry.sensors.z_down ? 'active' : 'inactive'"
+                       @click="toggleSimSensor('z_down')" :title="telemetry.is_simulation ? '點擊模擬觸發' : ''"
+                       :style="telemetry.is_simulation ? 'cursor:pointer' : ''">
+                    <span class="sensor-led-dot"></span>
+                    Z_DOWN (下限位): {{ telemetry.sensors.z_down ? '● 底部觸發' : '○ 正常' }}
+                  </div>
+                  <div class="sensor-pill" :class="telemetry.sensors.x_alm ? 'alarm' : 'inactive'">
+                    <span class="sensor-led-dot"></span>
+                    X 驅動 ALM: {{ telemetry.sensors.x_alm ? '⚠️ 閉環報警' : '✓ 正常' }}
+                  </div>
+                  <div class="sensor-pill" :class="telemetry.sensors.z_alm ? 'alarm' : 'inactive'">
+                    <span class="sensor-led-dot"></span>
+                    Z 驅動 ALM: {{ telemetry.sensors.z_alm ? '⚠️ 閉環報警' : '✓ 正常' }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- 手臂末端 8 點接近開關陣列 -->
+              <div class="sensor-compact-row">
+                <div class="sensor-compact-title">手臂末端工件感測開關 (ARM 1 ~ 8)</div>
+                <div class="sensor-pill-list">
+                  <div v-for="i in 8" :key="i" class="sensor-pill"
+                       :class="telemetry.sensors['arm_' + i] ? 'active' : 'inactive'"
+                       @click="toggleSimSensor('arm_' + i)" :title="telemetry.is_simulation ? '點擊模擬觸發' : ''"
+                       :style="telemetry.is_simulation ? 'cursor:pointer' : ''">
+                    <span class="sensor-led-dot"></span>
+                    ARM_{{ i }}: {{ telemetry.sensors['arm_' + i] ? '● 檢知' : '○ 無' }}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -495,13 +573,284 @@
             <button class="btn-home-sub" @click="runServiceRestart">
               🔄 重啟背景控制服務 (systemctl restart)
             </button>
-            <button class="btn-home-sub" style="border-color: #ef4444; color: #f87171;" @click="runReboot">
+            <button class="btn-home-sub" style="border-color: #f59e0b; color: #fbbf24;" @click="runReboot">
               ⚠️ 重開機樹梅派主機
+            </button>
+            <button class="btn-danger" @click="runShutdown">
+              🛑 安全關機樹梅派 (Shutdown)
             </button>
           </div>
 
           <div v-if="updateResult" style="margin-top: 16px; background: #0d121c; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); font-family: monospace; white-space: pre-wrap;">
             {{ updateResult }}
+          </div>
+        </div>
+
+        <!-- 樹梅派 4 實體 40-Pin 排針視覺接腳圖 -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📌 樹梅派 4 實體 40-Pin 排針接腳對照圖 (Physical Pinout)</span>
+            <span style="font-size: 12px; color: var(--text-muted);">
+              左排奇數腳 (1~39) ｜ 右排偶數腳 (2~40)
+            </span>
+          </div>
+
+          <!-- 色彩圖例 -->
+          <div class="pinout-legend">
+            <div class="legend-item"><span class="legend-dot" style="background: #3b82f6;"></span> 🔵 步進馬達 (PUL / DIR / ENA)</div>
+            <div class="legend-item"><span class="legend-dot" style="background: #10b981;"></span> 🟢 接近開關 (QN-1805-E1 * 13)</div>
+            <div class="legend-item"><span class="legend-dot" style="background: #a855f7;"></span> 🟣 電磁鐵控制 (LSD-P25/20 * 4)</div>
+            <div class="legend-item"><span class="legend-dot" style="background: #ef4444;"></span> 🔴 閉環警報 (2HSS86H ALM)</div>
+            <div class="legend-item"><span class="legend-dot" style="background: #f59e0b;"></span> ⚡ 3.3V 電源</div>
+            <div class="legend-item"><span class="legend-dot" style="background: #dc2626;"></span> ⚡ 5V 電源</div>
+            <div class="legend-item"><span class="legend-dot" style="background: #4b5563;"></span> ⬛ 接地 (GND)</div>
+          </div>
+
+          <!-- 40-Pin 雙排對照視覺盒 -->
+          <div class="pinout-header-box">
+            <table class="pinout-table">
+              <tbody>
+                <!-- Row 1: Pin 1 & Pin 2 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-pwr3">⚡ 3.3V Power (供光耦隔離側)</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle" style="border-color: #f59e0b;">1</span>
+                      <span class="pin-circle" style="border-color: #dc2626;">2</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-pwr5">⚡ 5V Power (主機直流供電)</span></td>
+                </tr>
+
+                <!-- Row 2: Pin 3 & Pin 4 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-em">🟣 GPIO 2 (SDA) -> EM_4 (電磁鐵4)</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle" style="border-color: #a855f7;">3</span>
+                      <span class="pin-circle" style="border-color: #dc2626;">4</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-pwr5">⚡ 5V Power (預留/備用)</span></td>
+                </tr>
+
+                <!-- Row 3: Pin 5 & Pin 6 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-nc">⚪ GPIO 3 (SCL) -> 預留 I2C</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle">5</span>
+                      <span class="pin-circle" style="border-color: #4b5563;">6</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-gnd">⬛ GND (樹梅派邏輯地)</span></td>
+                </tr>
+
+                <!-- Row 4: Pin 7 & Pin 8 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-em">🟣 GPIO 4 -> EM_1 (電磁鐵1)</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle" style="border-color: #a855f7;">7</span>
+                      <span class="pin-circle" style="border-color: #a855f7;">8</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-em">🟣 GPIO 14 (TXD) -> EM_2 (電磁鐵2)</span></td>
+                </tr>
+
+                <!-- Row 5: Pin 9 & Pin 10 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-gnd">⬛ GND (樹梅派邏輯地)</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle" style="border-color: #4b5563;">9</span>
+                      <span class="pin-circle" style="border-color: #a855f7;">10</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-em">🟣 GPIO 15 (RXD) -> EM_3 (電磁鐵3)</span></td>
+                </tr>
+
+                <!-- Row 6: Pin 11 & Pin 12 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-sensor">🟢 GPIO 17 -> X_LEFT (左極限/原點開關)</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle" style="border-color: #10b981;">11</span>
+                      <span class="pin-circle" style="border-color: #3b82f6;">12</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-motor">🔵 GPIO 18 (PWM0) -> X_PUL (X軸脈衝)</span></td>
+                </tr>
+
+                <!-- Row 7: Pin 13 & Pin 14 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-sensor">🟢 GPIO 27 -> X_MID (中間到位開關)</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle" style="border-color: #10b981;">13</span>
+                      <span class="pin-circle" style="border-color: #4b5563;">14</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-gnd">⬛ GND (樹梅派邏輯地)</span></td>
+                </tr>
+
+                <!-- Row 8: Pin 15 & Pin 16 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-sensor">🟢 GPIO 22 -> X_RIGHT (右極限開關)</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle" style="border-color: #10b981;">15</span>
+                      <span class="pin-circle" style="border-color: #3b82f6;">16</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-motor">🔵 GPIO 23 -> X_DIR (X軸方向)</span></td>
+                </tr>
+
+                <!-- Row 9: Pin 17 & Pin 18 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-pwr3">⚡ 3.3V Power (備用參考電壓)</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle" style="border-color: #f59e0b;">17</span>
+                      <span class="pin-circle" style="border-color: #3b82f6;">18</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-motor">🔵 GPIO 24 -> X_ENA (X軸鎖定/致能)</span></td>
+                </tr>
+
+                <!-- Row 10: Pin 19 & Pin 20 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-sensor">🟢 GPIO 10 -> Z_UP (頂端安全原點開關)</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle" style="border-color: #10b981;">19</span>
+                      <span class="pin-circle" style="border-color: #4b5563;">20</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-gnd">⬛ GND (樹梅派邏輯地)</span></td>
+                </tr>
+
+                <!-- Row 11: Pin 21 & Pin 22 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-sensor">🟢 GPIO 9 -> Z_DOWN (下極限開關)</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle" style="border-color: #10b981;">21</span>
+                      <span class="pin-circle" style="border-color: #ef4444;">22</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-alm">🔴 GPIO 25 -> Z_ALM (Z軸驅動閉環警報)</span></td>
+                </tr>
+
+                <!-- Row 12: Pin 23 & Pin 24 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-sensor">🟢 GPIO 11 -> ARM_1 (手臂末端開關1)</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle" style="border-color: #10b981;">23</span>
+                      <span class="pin-circle" style="border-color: #3b82f6;">24</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-motor">🔵 GPIO 8 -> Z_DIR (Z軸方向)</span></td>
+                </tr>
+
+                <!-- Row 13: Pin 25 & Pin 26 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-gnd">⬛ GND (樹梅派邏輯地)</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle" style="border-color: #4b5563;">25</span>
+                      <span class="pin-circle" style="border-color: #3b82f6;">26</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-motor">🔵 GPIO 7 -> Z_ENA (Z軸鎖定/致能)</span></td>
+                </tr>
+
+                <!-- Row 14: Pin 27 & Pin 28 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-nc">⚪ GPIO 0 (ID_SD) -> 系統保留</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle">27</span>
+                      <span class="pin-circle">28</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-nc">⚪ GPIO 1 (ID_SC) -> 系統保留</span></td>
+                </tr>
+
+                <!-- Row 15: Pin 29 & Pin 30 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-sensor">🟢 GPIO 5 -> ARM_2 (手臂末端開關2)</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle" style="border-color: #10b981;">29</span>
+                      <span class="pin-circle" style="border-color: #4b5563;">30</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-gnd">⬛ GND (樹梅派邏輯地)</span></td>
+                </tr>
+
+                <!-- Row 16: Pin 31 & Pin 32 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-sensor">🟢 GPIO 6 -> ARM_3 (手臂末端開關3)</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle" style="border-color: #10b981;">31</span>
+                      <span class="pin-circle" style="border-color: #3b82f6;">32</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-motor">🔵 GPIO 12 (PWM0) -> Z_PUL (Z軸脈衝)</span></td>
+                </tr>
+
+                <!-- Row 17: Pin 33 & Pin 34 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-sensor">🟢 GPIO 13 -> ARM_4 (手臂末端開關4)</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle" style="border-color: #10b981;">33</span>
+                      <span class="pin-circle" style="border-color: #4b5563;">34</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-gnd">⬛ GND (樹梅派邏輯地)</span></td>
+                </tr>
+
+                <!-- Row 18: Pin 35 & Pin 36 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-sensor">🟢 GPIO 19 -> ARM_5 (手臂末端開關5)</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle" style="border-color: #10b981;">35</span>
+                      <span class="pin-circle" style="border-color: #10b981;">36</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-sensor">🟢 GPIO 16 -> ARM_7 (手臂末端開關7)</span></td>
+                </tr>
+
+                <!-- Row 19: Pin 37 & Pin 38 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-sensor">🟢 GPIO 26 -> ARM_6 (手臂末端開關6)</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle" style="border-color: #10b981;">37</span>
+                      <span class="pin-circle" style="border-color: #10b981;">38</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-sensor">🟢 GPIO 20 -> ARM_8 (手臂末端開關8)</span></td>
+                </tr>
+
+                <!-- Row 20: Pin 39 & Pin 40 -->
+                <tr>
+                  <td class="pinout-left"><span class="pin-label pin-gnd">⬛ GND (樹梅派邏輯地)</span></td>
+                  <td class="pinout-center">
+                    <span class="pin-pair">
+                      <span class="pin-circle" style="border-color: #4b5563;">39</span>
+                      <span class="pin-circle" style="border-color: #ef4444;">40</span>
+                    </span>
+                  </td>
+                  <td class="pinout-right"><span class="pin-label pin-alm">🔴 GPIO 21 -> X_ALM (X軸驅動閉環警報)</span></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 

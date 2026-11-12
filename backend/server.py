@@ -167,6 +167,10 @@ def restart_service():
 def reboot_system():
     return system_manager.reboot_system()
 
+@app.post("/api/system/shutdown")
+def shutdown_system():
+    return system_manager.shutdown_system()
+
 @app.post("/api/sim/sensor")
 def sim_toggle_sensor(req: SimSensorToggleRequest):
     """供模擬測試時由前端手動點擊切換接近開關狀態"""

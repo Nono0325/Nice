@@ -50,6 +50,12 @@ def test_api():
     assert "雙軸龍門" in resp.text
     print("✓ GET / (前端網頁) 載入成功")
 
+    # 8. 測試關機 API
+    resp = client.post("/api/system/shutdown")
+    assert resp.status_code == 200
+    assert resp.json()["success"] == True
+    print("✓ POST /api/system/shutdown 成功:", resp.json()["message"])
+
     print("\n===============================")
     print("所有 Web API 路由測試 100% 通過！")
     print("===============================")

@@ -350,6 +350,18 @@ createApp({
       }
     };
 
+    const runShutdown = async () => {
+      if (!confirm('🛑 警告：確定要將樹梅派主機安全關機嗎？\n關機後若需重新啟動，需手動重新插拔電源！')) return;
+      try {
+        const res = await fetch('/api/system/shutdown', { method: 'POST' });
+        const data = await res.json();
+        addLog(data.message, 'err');
+        alert('樹梅派主機關機指令已下達，系統正在安全關閉電源...');
+      } catch (err) {
+        addLog(`關機請求失敗: ${err.message}`, 'err');
+      }
+    };
+
     // 計算 X 軸和 Z 軸的行程進度百分比 (用於條狀指示)
     const xProgressPercent = computed(() => {
       const min = telemetry.motor_x.min_limit_mm;
@@ -403,7 +415,8 @@ createApp({
       saveConfig,
       runGitUpdate,
       runServiceRestart,
-      runReboot
+      runReboot,
+      runShutdown
     };
   }
 }).mount('#app');

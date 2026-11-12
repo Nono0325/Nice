@@ -98,3 +98,13 @@ class SystemManager:
             return {"success": True, "message": "樹梅派重開機指令已下達"}
         except Exception as e:
             return {"success": False, "message": f"重開機失敗: {str(e)}"}
+
+    def shutdown_system(self) -> Dict[str, Any]:
+        """安全關閉樹梅派主機電源 (sudo shutdown -h now)"""
+        if os.name == "nt":
+            return {"success": True, "message": "Windows 平台模擬安全關機指令"}
+        try:
+            subprocess.Popen(["sudo", "shutdown", "-h", "now"])
+            return {"success": True, "message": "樹梅派安全關機指令已下達，系統即將關閉電源"}
+        except Exception as e:
+            return {"success": False, "message": f"關機失敗: {str(e)}"}
