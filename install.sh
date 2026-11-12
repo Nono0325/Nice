@@ -6,3 +6,4 @@ if [ -f "$DIR/quick-install.sh" ]; then
 else
     curl -sSL https://raw.githubusercontent.com/Nono0325/Nice2/main/quick-install.sh | bash
 fi
+

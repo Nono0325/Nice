@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # 雙軸龍門機械手臂智能控制系統 - 一句指令極速全自動安裝與開機自啟
-# 支援全自動 Clone、環境安裝、Systemd 守護行程開機自啟與立即啟動
+# 支援 Raspberry Pi OS Bookworm (Debian 12) & Bullseye (Debian 11)
 # ==============================================================================
 
 set -e
@@ -54,36 +54,61 @@ fi
 
 cd "${PROJECT_DIR}"
 
-# 3. 安裝系統級相依套件 (Python3, pip, pigpio)
+# 3. 安裝系統級基礎相依套件 (相容 Bookworm / Bullseye)
 echo -e "${CYAN}>>> [1/4] 安裝 Linux 系統軟體套件與 GPIO 驅動...${NC}"
 sudo apt-get update -qq
-sudo apt-get install -y python3 python3-pip python3-venv pigpio python3-pigpio curl
+sudo apt-get install -y python3 python3-pip python3-venv curl
 
-# 4. 安裝 Python 核心驅動相依庫
-echo -e "${CYAN}>>> [2/4] 安裝 Python 核心相依套件 (FastAPI, Uvicorn, WebSockets, etc.)...${NC}"
-pip3 install -r requirements.txt --break-system-packages 2>/dev/null || pip3 install -r requirements.txt
+# 針對 Bookworm 與 Bullseye 自動挑選最適合的 GPIO 驅動套件
+echo -e "${CYAN}>>> 正在配置樹梅派 GPIO 硬體驅動程式...${NC}"
+sudo apt-get install -y python3-rpi-lgpio 2>/dev/null || sudo apt-get install -y python3-rpi.gpio 2>/dev/null || true
+sudo apt-get install -y python3-lgpio 2>/dev/null || true
 
-# 5. 啟用並啟動硬體計時 DMA pigpiod 服務
-echo -e "${CYAN}>>> [3/4] 設定 pigpio 硬體定時 DMA 守護程序...${NC}"
-sudo systemctl enable pigpiod 2>/dev/null || true
-sudo systemctl restart pigpiod 2>/dev/null || true
+# 若舊版系統提供 pigpio 則安裝，若新版 Bookworm 無此套件則自動跳過，不中斷安裝
+sudo apt-get install -y pigpio python3-pigpio 2>/dev/null || true
+
+# 4. 安裝 Python 核心驅動相依庫 (使用虛擬環境相容 Debian 12 PEP 668)
+echo -e "${CYAN}>>> [2/4] 配置 Python 執行環境並安裝相依套件...${NC}"
+if [ ! -d "venv" ]; then
+    python3 -m venv venv --system-site-packages 2>/dev/null || true
+fi
+
+if [ -f "venv/bin/pip" ]; then
+    echo -e "${CYAN}>>> 透過專用虛擬環境安裝相依套件...${NC}"
+    venv/bin/pip install -r requirements.txt
+    PYTHON_EXEC="${PROJECT_DIR}/venv/bin/python"
+else
+    echo -e "${CYAN}>>> 透過系統 pip 安裝相依套件...${NC}"
+    pip3 install -r requirements.txt --break-system-packages 2>/dev/null || \
+    pip3 install -r requirements.txt 2>/dev/null || \
+    pip install -r requirements.txt 2>/dev/null || true
+    PYTHON_EXEC=$(which python3 || echo "/usr/bin/python3")
+fi
+
+# 5. 若有安裝 pigpio 則啟用服務
+if command -v pigpiod &> /dev/null; then
+    echo -e "${CYAN}>>> [3/4] 啟用 pigpio 硬體定時 DMA 守護程序...${NC}"
+    sudo systemctl enable pigpiod 2>/dev/null || true
+    sudo systemctl restart pigpiod 2>/dev/null || true
+else
+    echo -e "${CYAN}>>> [3/4] 使用 Linux 核心 GPIO / lgpio 驅動模式 (相容 Bookworm)${NC}"
+fi
 
 # 6. 配置 systemd 開機自啟動服務
 echo -e "${CYAN}>>> [4/4] 註冊並設定開機自啟動服務 (gantry-control.service)...${NC}"
 SERVICE_FILE="/etc/systemd/system/gantry-control.service"
-PYTHON_PATH=$(which python3 || echo "/usr/bin/python3")
 
 sudo bash -c "cat <<EOF > ${SERVICE_FILE}
 [Unit]
 Description=雙軸龍門機械手臂智能控制系統守護行程
-After=network.target pigpiod.service
+After=network.target
 Wants=network.target
 
 [Service]
 Type=simple
 User=${CURRENT_USER}
 WorkingDirectory=${PROJECT_DIR}
-ExecStart=${PYTHON_PATH} ${PROJECT_DIR}/main.py
+ExecStart=${PYTHON_EXEC} ${PROJECT_DIR}/main.py
 Restart=always
 RestartSec=3
 KillMode=process
@@ -110,6 +135,7 @@ echo -e "${GREEN}===============================================================
 echo -e "  ● 服務狀態:     ${GREEN}運行中 (Active: running)${NC}"
 echo -e "  ● 開機自啟動:   ${GREEN}已啟用 (開機/斷電通電即自動運行)${NC}"
 echo -e "  ● 專案路徑:     ${CYAN}${PROJECT_DIR}${NC}"
+echo -e "  ● Python直譯器: ${CYAN}${PYTHON_EXEC}${NC}"
 echo -e "  ● Web 控制頁面: ${YELLOW}http://${IP_ADDR}:8000${NC} 或 ${YELLOW}http://localhost:8000${NC}"
 echo -e "${GREEN}================================================================${NC}"
 echo -e "常用指令說明："

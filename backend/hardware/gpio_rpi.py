@@ -23,10 +23,18 @@ class RPiGPIO(GPIOBase):
         try:
             import lgpio
             self.lgpio = lgpio
-            self.chip = lgpio.gpiochip_open(0)
-            self.driver = "lgpio"
-            logger.info("成功載入 lgpio 模組 (Raspberry Pi 5 / Bookworm)")
-            return
+            # 嘗試打開 gpiochip (樹梅派 4 預設為 chip 0，樹梅派 5 預設為 chip 4)
+            self.chip = None
+            for chip_num in [0, 4]:
+                try:
+                    self.chip = lgpio.gpiochip_open(chip_num)
+                    break
+                except Exception:
+                    continue
+            if self.chip is not None:
+                self.driver = "lgpio"
+                logger.info(f"成功載入 lgpio 模組 (gpiochip {chip_num})")
+                return
         except (ImportError, RuntimeError):
             pass
 
