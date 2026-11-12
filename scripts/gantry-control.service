@@ -1,0 +1,15 @@
+[Unit]
+Description=雙軸龍門機械手臂智能控制系統守護行程
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/Nice2
+ExecStart=/usr/bin/python3 /home/pi/Nice2/main.py
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

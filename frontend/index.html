@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>雙軸龍門機械手臂智能控制系統</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="/static/js/vue.global.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- 頂部系統導航列 -->
+    <header>
+      <div class="brand">
+        <div class="brand-icon">⚡</div>
+        <div class="brand-info">
+          <h1>雙軸龍門手臂控制系統</h1>
+          <div class="brand-subtitle">Raspberry Pi 4 智慧工控主機 (2HSS86H 閉環驅動)</div>
+        </div>
+      </div>
+
+      <div class="header-status">
+        <!-- 運轉狀態標籤 -->
+        <span class="status-badge" :class="{
+          'badge-idle': telemetry.state === 'IDLE',
+          'badge-moving': telemetry.state === 'MOVING',
+          'badge-homing': telemetry.state === 'HOMING',
+          'badge-estop': telemetry.state === 'ESTOP',
+          'badge-alarm': telemetry.state === 'ALARM'
+        }">
+          ● {{ telemetry.state }}
+        </span>
+
+        <!-- 模擬模式標籤 -->
+        <span v-if="telemetry.is_simulation" class="status-badge badge-sim">
+          虛擬模擬模式 (SIMULATION)
+        </span>
+
+        <!-- WebSocket 狀態 -->
+        <span style="font-size: 11px; color: var(--text-muted);">
+          通訊: <span :style="{ color: wsConnected ? '#10b981' : '#ef4444' }">{{ wsConnected ? '連線中' : '重連中...' }}</span>
+        </span>
+
+        <!-- 急停與解除按鈕 -->
+        <button class="btn-estop" @click="triggerEStop">
+          🛑 緊急停止 (E-STOP)
+        </button>
+        <button v-if="telemetry.state === 'ESTOP' || telemetry.state === 'ALARM'" class="btn-reset-estop" @click="clearEStop">
+          重置復歸
+        </button>
+      </div>
+    </header>
+
+    <!-- 系統遙測數據條 -->
+    <div class="system-telemetry">
+      <div class="sys-item">CPU 溫度: <span>{{ telemetry.system.cpu_temp_c }} °C</span></div>
+      <div class="sys-item">CPU 負載: <span>{{ telemetry.system.cpu_percent }} %</span></div>
+      <div class="sys-item">記憶體: <span>{{ telemetry.system.ram_used_mb }} / {{ telemetry.system.ram_total_mb }} MB ({{ telemetry.system.ram_percent }}%)</span></div>
+      <div class="sys-item">主機開機時間: <span>{{ telemetry.system.uptime }}</span></div>
+      <div class="sys-item">平台: <span>{{ telemetry.system.platform }} (Python {{ telemetry.system.python_version }})</span></div>
+    </div>
+
+    <!-- 分頁選單 -->
+    <nav class="tab-bar">
+      <button class="tab-btn" :class="{ active: currentTab === 'cockpit' }" @click="currentTab = 'cockpit'">
+        🎮 運動主控台
+      </button>
+      <button class="tab-btn" :class="{ active: currentTab === 'sensors' }" @click="currentTab = 'sensors'">
+        📡 感測器與夾爪 (13+4)
+      </button>
+      <button class="tab-btn" :class="{ active: currentTab === 'motors' }" @click="currentTab = 'motors'">
+        ⚙️ 馬達參數設定
+      </button>
+      <button class="tab-btn" :class="{ active: currentTab === 'system' }" @click="currentTab = 'system'">
+        🔄 系統維護與更新
+      </button>
+    </nav>
+
+    <!-- 主內容區 -->
+    <main>
+      <!-- TAB 1: 運動主控台 -->
+      <div v-show="currentTab === 'cockpit'" class="grid-cockpit">
+        <!-- 左側：座標顯示與馬達致能、歸零 -->
+        <div>
+          <!-- 軸座標顯示卡片 -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">📍 即時軸向座標與狀態</span>
+              <button class="btn-lock" :class="telemetry.motor_x.is_locked && telemetry.motor_z.is_locked ? 'locked' : 'unlocked'" @click="toggleMotorLock('ALL')">
+                {{ (telemetry.motor_x.is_locked && telemetry.motor_z.is_locked) ? '🔒 全軸已致能鎖定' : '🔓 全軸已離合釋放' }}
+              </button>
+            </div>
+
+            <div class="axes-container">
+              <!-- X 軸顯示 -->
+              <div class="axis-box" :class="{ active: telemetry.motor_x.is_moving }">
+                <div class="axis-name-row">
+                  <span class="axis-label">X 軸 (單馬達 57BYG)</span>
+                  <span class="axis-homed-tag" :class="telemetry.motor_x.is_homed ? 'homed-yes' : 'homed-no'">
+                    {{ telemetry.motor_x.is_homed ? '✓ 已歸零校準' : '! 未歸零' }}
+                  </span>
+                </div>
+                <div class="axis-value">{{ telemetry.motor_x.position_mm.toFixed(2) }} <span class="axis-unit">mm</span></div>
+                <div class="axis-steps">脈衝計數: {{ telemetry.motor_x.position_steps }} steps</div>
+                <div class="axis-track">
+                  <div class="axis-bar" :style="{ width: xProgressPercent + '%' }"></div>
+                </div>
+
+                <div class="motor-lock-row">
+                  <button class="btn-lock" :class="telemetry.motor_x.is_locked ? 'locked' : 'unlocked'" @click="toggleMotorLock('X')">
+                    {{ telemetry.motor_x.is_locked ? '🔒 X軸鎖定 (保持力矩)' : '🔓 X軸解鎖 (手動推動)' }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Z 軸顯示 -->
+              <div class="axis-box" :class="{ active: telemetry.motor_z.is_moving }">
+                <div class="axis-name-row">
+                  <span class="axis-label">Z 軸 (雙馬達 57BYG同步)</span>
+                  <span class="axis-homed-tag" :class="telemetry.motor_z.is_homed ? 'homed-yes' : 'homed-no'">
+                    {{ telemetry.motor_z.is_homed ? '✓ 已歸零校準' : '! 未歸零' }}
+                  </span>
+                </div>
+                <div class="axis-value">{{ telemetry.motor_z.position_mm.toFixed(2) }} <span class="axis-unit">mm</span></div>
+                <div class="axis-steps">脈衝計數: {{ telemetry.motor_z.position_steps }} steps</div>
+                <div class="axis-track">
+                  <div class="axis-bar" :style="{ width: zProgressPercent + '%' }"></div>
+                </div>
+
+                <div class="motor-lock-row">
+                  <button class="btn-lock" :class="telemetry.motor_z.is_locked ? 'locked' : 'unlocked'" @click="toggleMotorLock('Z')">
+                    {{ telemetry.motor_z.is_locked ? '🔒 Z軸鎖定 (保持力矩)' : '🔓 Z軸解鎖 (手動推動)' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 自動原點復歸程序 -->
+            <div style="margin-top: 10px;">
+              <div style="font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 8px;">
+                🔄 自動歸零程序 (Auto Homing)
+              </div>
+              <div class="homing-box">
+                <button class="btn-home" :disabled="telemetry.state === 'HOMING'" @click="triggerHoming('ALL')">
+                  🎯 全軸智慧歸零 (先升 Z 頂端避碰，再橫移 X 原點)
+                </button>
+                <button class="btn-home-sub" :disabled="telemetry.state === 'HOMING'" @click="triggerHoming('Z')">
+                  僅歸零 Z 軸
+                </button>
+                <button class="btn-home-sub" :disabled="telemetry.state === 'HOMING'" @click="triggerHoming('X')">
+                  僅歸零 X 軸
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 電磁鐵吸附控制 (LSD-P25/20 * 4) -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🧲 LSD-P25/20 強力直流電磁鐵 (4組)</span>
+              <div>
+                <button class="pill-btn" style="color: #34d399; margin-right: 6px;" @click="toggleAllElectromagnets(true)">全部吸附 ON</button>
+                <button class="pill-btn" style="color: #f87171;" @click="toggleAllElectromagnets(false)">全部釋放 OFF</button>
+              </div>
+            </div>
+
+            <div class="em-grid">
+              <div v-for="i in 4" :key="i" class="em-card" :class="{ active: telemetry.electromagnets['em' + i] }" @click="toggleElectromagnet(i)">
+                <div class="em-icon">🧲</div>
+                <div class="em-title">電磁鐵 EM{{ i }}</div>
+                <div class="em-state-text">{{ telemetry.electromagnets['em' + i] ? '已通電吸附中' : '已斷電釋放' }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右側：寸動搖桿控制台與絕對定位 -->
+        <div>
+          <!-- 寸動控制 -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🕹️ 手動寸動控制台 (Jog)</span>
+            </div>
+
+            <!-- 寸動步長選擇 -->
+            <div class="control-row">
+              <span class="control-label">單步步長:</span>
+              <div class="pill-group">
+                <button v-for="step in [0.1, 1.0, 5.0, 10.0, 50.0, 100.0]" :key="step"
+                        class="pill-btn" :class="{ active: jogDistance === step }"
+                        @click="jogDistance = step">
+                  {{ step }} mm
+                </button>
+              </div>
+            </div>
+
+            <!-- 寸動速度選擇 -->
+            <div class="control-row">
+              <span class="control-label">移動速度:</span>
+              <div class="pill-group">
+                <button class="pill-btn" :class="{ active: jogSpeedMode === 'slow' }" @click="jogSpeedMode = 'slow'">
+                  慢速微調
+                </button>
+                <button class="pill-btn" :class="{ active: jogSpeedMode === 'normal' }" @click="jogSpeedMode = 'normal'">
+                  標準定位
+                </button>
+                <button class="pill-btn" :class="{ active: jogSpeedMode === 'fast' }" @click="jogSpeedMode = 'fast'">
+                  快速巡航
+                </button>
+              </div>
+            </div>
+
+            <!-- 十字方向寸動按鈕 -->
+            <div class="jog-pad-container">
+              <div class="jog-cross">
+                <div></div>
+                <button class="jog-btn" @click="sendJog('Z', 1)">
+                  ▲
+                  <span class="axis-tag">Z+ 上升</span>
+                </button>
+                <div></div>
+
+                <button class="jog-btn" @click="sendJog('X', -1)">
+                  ◀
+                  <span class="axis-tag">X- 向左</span>
+                </button>
+                <div class="jog-center">
+                  <span>{{ jogDistance }}mm</span>
+                </div>
+                <button class="jog-btn" @click="sendJog('X', 1)">
+                  ▶
+                  <span class="axis-tag">X+ 向右</span>
+                </button>
+
+                <div></div>
+                <button class="jog-btn" @click="sendJog('Z', -1)">
+                  ▼
+                  <span class="axis-tag">Z- 下降</span>
+                </button>
+                <div></div>
+              </div>
+            </div>
+
+            <!-- 絕對座標直接定位 -->
+            <div style="margin-top: 20px; padding-top: 14px; border-top: 1px dashed var(--border-color);">
+              <div style="font-size: 13px; font-weight: 700; color: var(--text-muted); margin-bottom: 8px;">
+                📐 絕對座標定位移動 (G0/G1)
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <input type="number" step="0.1" v-model="customTargetX" class="form-control" placeholder="X (mm)">
+                <input type="number" step="0.1" v-model="customTargetZ" class="form-control" placeholder="Z (mm)">
+                <button class="btn-primary" style="white-space: nowrap; padding: 9px 16px;" @click="moveToCustom">
+                  移至座標
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 即時事件日誌 -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">📜 系統運作日誌</span>
+              <button class="pill-btn" @click="logs = []">清空</button>
+            </div>
+            <div class="console-box">
+              <div v-for="(log, idx) in logs" :key="idx" class="console-line">
+                <span class="console-time">{{ log.time }}</span>
+                <span :class="'console-' + log.type">{{ log.text }}</span>
+              </div>
+              <div v-if="logs.length === 0" style="color: #64748b; font-style: italic;">暫無最新日誌...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: 感測器與機構 (13顆接近開關 + 2組閉環警報) -->
+      <div v-show="currentTab === 'sensors'">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📡 機構行程接近開關狀態 (QN-1805-E1 方形電感感測器)</span>
+            <span v-if="telemetry.is_simulation" style="font-size: 12px; color: var(--accent-purple);">
+              提示：模擬模式下，可直接點擊下方感測器以模擬金屬感應！
+            </span>
+          </div>
+
+          <div class="sensor-layout">
+            <!-- X 軸 3顆接近開關 -->
+            <div class="sensor-row">
+              <div>
+                <strong>X 軸開關群:</strong>
+                <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">
+                  X_LEFT (原點/極限), X_MID (中間到位檢測), X_RIGHT (右極限)
+                </span>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <span class="sensor-tag" :class="telemetry.sensors.x_left ? 'sensor-triggered' : 'sensor-open'"
+                      style="cursor: pointer;" @click="toggleSimSensor('x_left')">
+                  X_LEFT {{ telemetry.sensors.x_left ? '● 觸發 (導通)' : '○ 正常' }}
+                </span>
+                <span class="sensor-tag" :class="telemetry.sensors.x_mid ? 'sensor-triggered' : 'sensor-open'"
+                      style="cursor: pointer;" @click="toggleSimSensor('x_mid')">
+                  X_MID {{ telemetry.sensors.x_mid ? '● 觸發 (到位)' : '○ 正常' }}
+                </span>
+                <span class="sensor-tag" :class="telemetry.sensors.x_right ? 'sensor-triggered' : 'sensor-open'"
+                      style="cursor: pointer;" @click="toggleSimSensor('x_right')">
+                  X_RIGHT {{ telemetry.sensors.x_right ? '● 觸發 (極限)' : '○ 正常' }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Z 軸 2顆接近開關 -->
+            <div class="sensor-row">
+              <div>
+                <strong>Z 軸開關群:</strong>
+                <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">
+                  Z_UP (頂端安全歸零點), Z_DOWN (下限位檢測)
+                </span>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <span class="sensor-tag" :class="telemetry.sensors.z_up ? 'sensor-triggered' : 'sensor-open'"
+                      style="cursor: pointer;" @click="toggleSimSensor('z_up')">
+                  Z_UP {{ telemetry.sensors.z_up ? '● 頂部觸發' : '○ 正常' }}
+                </span>
+                <span class="sensor-tag" :class="telemetry.sensors.z_down ? 'sensor-triggered' : 'sensor-open'"
+                      style="cursor: pointer;" @click="toggleSimSensor('z_down')">
+                  Z_DOWN {{ telemetry.sensors.z_down ? '● 底部極限' : '○ 正常' }}
+                </span>
+              </div>
+            </div>
+
+            <!-- 2HSS86H 閉環步進驅動器警報輸出 -->
+            <div class="sensor-row">
+              <div>
+                <strong>2HSS86H 驅動器閉環警報 (ALM):</strong>
+                <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">
+                  脫步保護、電機堵轉、過流過壓硬體報警
+                </span>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <span class="sensor-tag" :class="telemetry.sensors.x_alm ? 'sensor-triggered' : 'sensor-open'"
+                      :style="telemetry.sensors.x_alm ? { background: '#ef4444', color: '#fff' } : {}">
+                  X 驅動器 ALM: {{ telemetry.sensors.x_alm ? '⚠️ 報警異常' : '✓ 正常' }}
+                </span>
+                <span class="sensor-tag" :class="telemetry.sensors.z_alm ? 'sensor-triggered' : 'sensor-open'"
+                      :style="telemetry.sensors.z_alm ? { background: '#ef4444', color: '#fff' } : {}">
+                  Z 驅動器 ALM: {{ telemetry.sensors.z_alm ? '⚠️ 報警異常' : '✓ 正常' }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 手臂末端 8 顆接近開關矩陣 -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🦾 手臂末端 8 點接近開關陣列 (工件定位 / 夾爪檢知)</span>
+            <span style="font-size: 12px; color: var(--text-muted);">
+              經由 817 光耦隔離板輸入至樹梅派 GPIO
+            </span>
+          </div>
+
+          <div class="arm-matrix">
+            <div v-for="i in 8" :key="i" class="arm-sensor-box"
+                 :class="{ active: telemetry.sensors['arm_' + i] }"
+                 style="cursor: pointer;"
+                 @click="toggleSimSensor('arm_' + i)">
+              <div class="arm-sensor-led"></div>
+              <div class="arm-sensor-label">ARM_{{ i }}</div>
+              <div class="arm-sensor-sub">{{ telemetry.sensors['arm_' + i] ? '已檢測到工件' : '無工件 (開路)' }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: 馬達參數設定 -->
+      <div v-show="currentTab === 'motors'">
+        <div v-if="configForm" class="settings-form">
+          <!-- X 軸設定 -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">⚙️ X 軸馬達參數 (單顆 57BYG-112 + 2HSS86H)</span>
+            </div>
+
+            <div class="form-group">
+              <label>驅動器細分微步 (Steps/Rev)</label>
+              <input type="number" v-model.number="configForm.motor_x.steps_per_rev" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>導程或每轉位移 (mm/Rev)</label>
+              <input type="number" step="0.1" v-model.number="configForm.motor_x.pitch_mm_per_rev" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>最高速度 (mm/s)</label>
+              <input type="number" step="1" v-model.number="configForm.motor_x.max_speed_mm_s" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>歸零尋點速度 (mm/s)</label>
+              <input type="number" step="1" v-model.number="configForm.motor_x.homing_speed_mm_s" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>二次精確碰觸速度 (mm/s)</label>
+              <input type="number" step="0.5" v-model.number="configForm.motor_x.creep_speed_mm_s" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>加速度 (mm/s²)</label>
+              <input type="number" step="10" v-model.number="configForm.motor_x.accel_mm_s2" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>軟體行程範圍 [最小, 最大] (mm)</label>
+              <div style="display: flex; gap: 10px;">
+                <input type="number" v-model.number="configForm.motor_x.min_limit_mm" class="form-control" placeholder="Min">
+                <input type="number" v-model.number="configForm.motor_x.max_limit_mm" class="form-control" placeholder="Max">
+              </div>
+            </div>
+            <div class="checkbox-row">
+              <input type="checkbox" id="x_dir" v-model="configForm.motor_x.dir_inverted">
+              <label for="x_dir">方向信號反轉 (Invert DIR)</label>
+            </div>
+            <div class="checkbox-row">
+              <input type="checkbox" id="x_ena" v-model="configForm.motor_x.ena_inverted">
+              <label for="x_ena">致能信號反轉 (Invert ENA)</label>
+            </div>
+          </div>
+
+          <!-- Z 軸設定 -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">⚙️ Z 軸雙馬達同步參數 (雙 57BYG-112 + 2HSS86H)</span>
+            </div>
+
+            <div class="form-group">
+              <label>驅動器細分微步 (Steps/Rev)</label>
+              <input type="number" v-model.number="configForm.motor_z.steps_per_rev" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>螺桿導程 (mm/Rev，例如5mm螺桿)</label>
+              <input type="number" step="0.1" v-model.number="configForm.motor_z.pitch_mm_per_rev" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>最高速度 (mm/s)</label>
+              <input type="number" step="1" v-model.number="configForm.motor_z.max_speed_mm_s" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>歸零尋點速度 (mm/s)</label>
+              <input type="number" step="1" v-model.number="configForm.motor_z.homing_speed_mm_s" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>二次精確碰觸速度 (mm/s)</label>
+              <input type="number" step="0.5" v-model.number="configForm.motor_z.creep_speed_mm_s" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>加速度 (mm/s²)</label>
+              <input type="number" step="10" v-model.number="configForm.motor_z.accel_mm_s2" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>軟體行程範圍 [最小, 最大] (mm)</label>
+              <div style="display: flex; gap: 10px;">
+                <input type="number" v-model.number="configForm.motor_z.min_limit_mm" class="form-control" placeholder="Min">
+                <input type="number" v-model.number="configForm.motor_z.max_limit_mm" class="form-control" placeholder="Max">
+              </div>
+            </div>
+            <div class="checkbox-row">
+              <input type="checkbox" id="z_dir" v-model="configForm.motor_z.dir_inverted">
+              <label for="z_dir">方向信號反轉 (Invert DIR)</label>
+            </div>
+            <div class="checkbox-row">
+              <input type="checkbox" id="z_ena" v-model="configForm.motor_z.ena_inverted">
+              <label for="z_ena">致能信號反轉 (Invert ENA)</label>
+            </div>
+          </div>
+        </div>
+
+        <div style="text-align: right; margin-top: 10px;">
+          <button class="btn-primary" style="padding: 12px 30px; font-size: 15px;" @click="saveConfig">
+            💾 儲存並立即套用所有馬達設定
+          </button>
+        </div>
+      </div>
+
+      <!-- TAB 4: 系統維護與更新 -->
+      <div v-show="currentTab === 'system'">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🔄 系統更新與軟體維護</span>
+          </div>
+
+          <p style="color: var(--text-muted); margin-bottom: 16px;">
+            您可在此執行線上一鍵拉取最新版本程式碼 (Git Pull)、重啟樹梅派守護行程或進行系統重開機。
+          </p>
+
+          <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <button class="btn-primary" :disabled="isUpdating" @click="runGitUpdate">
+              {{ isUpdating ? '⏳ 正在檢查與拉取更新...' : '🚀 檢查並執行 Git 線上更新' }}
+            </button>
+            <button class="btn-home-sub" @click="runServiceRestart">
+              🔄 重啟背景控制服務 (systemctl restart)
+            </button>
+            <button class="btn-home-sub" style="border-color: #ef4444; color: #f87171;" @click="runReboot">
+              ⚠️ 重開機樹梅派主機
+            </button>
+          </div>
+
+          <div v-if="updateResult" style="margin-top: 16px; background: #0d121c; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); font-family: monospace; white-space: pre-wrap;">
+            {{ updateResult }}
+          </div>
+        </div>
+
+        <!-- 硬體配線與規格參考手冊快捷區 -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📋 硬體清單與規格對應表</span>
+          </div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+              <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-muted); text-align: left;">
+                <th style="padding: 8px;">模組名稱</th>
+                <th style="padding: 8px;">型號/規格</th>
+                <th style="padding: 8px;">數量與分配</th>
+                <th style="padding: 8px;">樹梅派 4 接口與驅動方式</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid #1a2233;">
+                <td style="padding: 8px;">步進伺服閉環驅動器</td>
+                <td style="padding: 8px;">2HSS86H</td>
+                <td style="padding: 8px;">2 台</td>
+                <td style="padding: 8px;">X軸: GPIO 18, 23, 24 / Z軸: GPIO 12, 8, 7</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #1a2233;">
+                <td style="padding: 8px;">步進馬達</td>
+                <td style="padding: 8px;">57BYG-112 4.6P SH21 B1-046-LBW</td>
+                <td style="padding: 8px;">3 顆</td>
+                <td style="padding: 8px;">X 軸 1 顆，Z 軸 2 顆並聯/同步驅動</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #1a2233;">
+                <td style="padding: 8px;">方形電感接近開關</td>
+                <td style="padding: 8px;">QN-1805-E1 (NPN/PNP NO)</td>
+                <td style="padding: 8px;">13 顆</td>
+                <td style="padding: 8px;">X軸 3 顆 (左/中/右)，Z軸 2 顆 (上/下)，手臂末端 8 顆</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #1a2233;">
+                <td style="padding: 8px;">圓形強力直流電磁鐵</td>
+                <td style="padding: 8px;">LSD-P25/20 (DC 12V/24V)</td>
+                <td style="padding: 8px;">4 組</td>
+                <td style="padding: 8px;">GPIO 4, 14, 15, 2 (經 PC817 + 功率驅動)</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #1a2233;">
+                <td style="padding: 8px;">光耦隔離板</td>
+                <td style="padding: 8px;">817 光耦電壓隔離 / PC817 轉接模組</td>
+                <td style="padding: 8px;">多組</td>
+                <td style="padding: 8px;">隔離高低壓訊號，保護樹梅派 GPIO (3.3V) 免受干擾與突波</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
