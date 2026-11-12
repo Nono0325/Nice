@@ -39,3 +39,4 @@ class SimGPIO(GPIOBase):
         self.pin_values.clear()
         self.pin_modes.clear()
         logger.info("[模擬模式] 虛擬 GPIO 資源已重置")
+

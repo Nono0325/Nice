@@ -20,3 +20,4 @@ class GPIOBase(ABC):
     @abstractmethod
     def cleanup(self):
         pass
+

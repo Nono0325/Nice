@@ -25,3 +25,4 @@ def get_gpio(force_simulation: bool = False) -> tuple[GPIOBase, bool]:
     _gpio_instance = SimGPIO()
     _is_simulation = True
     return _gpio_instance, _is_simulation
+

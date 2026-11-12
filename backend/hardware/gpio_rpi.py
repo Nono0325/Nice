@@ -66,3 +66,4 @@ class RPiGPIO(GPIOBase):
         elif self.driver == "lgpio":
             self.lgpio.gpiochip_close(self.chip)
         logger.info("GPIO 硬體資源已釋放清理")
+

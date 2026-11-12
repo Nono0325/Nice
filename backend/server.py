@@ -218,3 +218,4 @@ if os.path.exists(FRONTEND_DIR):
     @app.get("/")
     def serve_index():
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+

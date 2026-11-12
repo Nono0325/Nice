@@ -72,3 +72,4 @@ echo "   重啟服務: sudo systemctl restart ${SERVICE_NAME}"
 echo "   停止服務: sudo systemctl stop ${SERVICE_NAME}"
 echo "   檢視日誌: sudo journalctl -u ${SERVICE_NAME} -f"
 echo "=========================================================="
+

@@ -146,3 +146,4 @@ class ConfigManager:
 
 # 全域單例
 config_mgr = ConfigManager()
+
