@@ -133,23 +133,21 @@ class MotionEngine:
             self.state = "MOVING"
             try:
                 if axis == "X":
-                    # X 軸運動並監測對應極限開關
+                    # X 軸運動並監測對應極限開關 (直接精確讀取對應引腳，避免額外開銷)
                     def stop_check():
-                        sensors = self.sensor_monitor.read_all()
-                        if direction < 0 and sensors.get("x_left"):
-                            return True
-                        if direction > 0 and sensors.get("x_right"):
-                            return True
-                        return False
+                        if self.is_simulation:
+                            return False
+                        pin = self.cfg.sensors.x_left if direction < 0 else self.cfg.sensors.x_right
+                        val = self.gpio.read_pin(pin)
+                        return (val == 0) if self.cfg.sensors.active_low else (val == 1)
                     self.motor_x.move_rel(delta, speed_mm_s=speed_mm_s, check_stop_condition=stop_check)
                 elif axis == "Z":
                     def stop_check():
-                        sensors = self.sensor_monitor.read_all()
-                        if direction < 0 and sensors.get("z_down"):
-                            return True
-                        if direction > 0 and sensors.get("z_up"):
-                            return True
-                        return False
+                        if self.is_simulation:
+                            return False
+                        pin = self.cfg.sensors.z_down if direction < 0 else self.cfg.sensors.z_up
+                        val = self.gpio.read_pin(pin)
+                        return (val == 0) if self.cfg.sensors.active_low else (val == 1)
                     self.motor_z.move_rel(delta, speed_mm_s=speed_mm_s, check_stop_condition=stop_check)
             finally:
                 if self.state == "MOVING":
@@ -205,73 +203,63 @@ class MotionEngine:
 
                 target_axes = axes.upper()
 
-                # --- 步驟 1: Z 軸歸零 (安全起見，先上升 Z 軸至頂部接近開關 z_up) ---
+                # --- 步驟 1: Z 軸歸零 (向上移動，直到碰到頂部電感式接近開關 Z_UP) ---
                 if target_axes in ["ALL", "Z"]:
                     self.motor_z.is_homed = False
-                    logger.info(">>> 執行 Z 軸安全歸零 (往頂部接近開關尋找原點)...")
+                    logger.info(">>> 執行 Z 軸安全歸零 (向上移動，直到碰到頂部電感式接近開關 Z_UP)...")
                     z_cfg = self.cfg.motor_z
-                    dir_sign = 1 if z_cfg.home_direction > 0 else -1
-                    
-                    # 階段 1.1: 快速尋點
-                    def z_sensor_hit():
-                        if self.is_simulation:
-                            return self.motor_z.position_mm >= (z_cfg.max_limit_mm - 2.0) if dir_sign > 0 else self.motor_z.position_mm <= 2.0
-                        return self.sensor_monitor.read_all().get("z_up" if dir_sign > 0 else "z_down", False)
 
-                    # 若一開始就壓在開關上，先緩慢退回
-                    if z_sensor_hit():
-                        self.motor_z.move_rel(-dir_sign * z_cfg.backoff_mm, speed_mm_s=z_cfg.creep_speed_mm_s, ignore_limits=True)
+                    # 即時精準檢測頂部電感接近開關 (Z_UP)
+                    def is_z_up_hit() -> bool:
+                        if self.is_simulation:
+                            return self.motor_z.position_mm >= (z_cfg.max_limit_mm - 2.0)
+                        val = self.gpio.read_pin(self.cfg.sensors.z_up)
+                        return (val == 0) if self.cfg.sensors.active_low else (val == 1)
+
+                    # 若初始已在頂部開關觸發狀態，先緩慢向下微退，直到脫離開關
+                    if is_z_up_hit():
+                        logger.info("Z 軸初始已在頂部開關上，先緩慢向下微退...")
+                        self.motor_z.move_rel(-1 * z_cfg.backoff_mm, speed_mm_s=z_cfg.creep_speed_mm_s, ignore_limits=True)
                         time.sleep(0.05)
 
-                    # 快速向開關方向運動
-                    max_travel = z_cfg.max_limit_mm - z_cfg.min_limit_mm + 20.0
-                    self.motor_z.move_rel(dir_sign * max_travel, speed_mm_s=z_cfg.homing_speed_mm_s, check_stop_condition=z_sensor_hit, ignore_limits=True)
+                    # 向上移動尋找開關，直到碰到開關停止
+                    max_travel = z_cfg.max_limit_mm - z_cfg.min_limit_mm + 50.0
+                    self.motor_z.move_rel(1 * max_travel, speed_mm_s=z_cfg.homing_speed_mm_s, check_stop_condition=is_z_up_hit, ignore_limits=True)
                     if self.state == "ESTOP": return
-
-                    # 階段 1.2: 退出緩衝距
-                    time.sleep(0.05)
-                    self.motor_z.move_rel(-dir_sign * z_cfg.backoff_mm, speed_mm_s=z_cfg.homing_speed_mm_s, ignore_limits=True)
-                    time.sleep(0.05)
-
-                    # 階段 1.3: 慢速精準觸摸開關 (Creep)
-                    self.motor_z.move_rel(dir_sign * (z_cfg.backoff_mm + 2.0), speed_mm_s=z_cfg.creep_speed_mm_s, check_stop_condition=z_sensor_hit, ignore_limits=True)
-                    time.sleep(0.05)
 
                     # 設定原點座標
                     self.motor_z.set_position_mm(z_cfg.home_offset_mm)
                     self.motor_z.is_homed = True
-                    logger.info(f"Z 軸歸零完成！已校準座標為 {z_cfg.home_offset_mm:.2f}mm")
+                    logger.info(f"Z 軸已觸碰頂部接近開關 (Z_UP) 停止！歸零完成，已校準座標為 {z_cfg.home_offset_mm:.2f}mm")
 
-                # --- 步驟 2: X 軸歸零 (水平向左端開關 x_left 尋找原點) ---
+                # --- 步驟 2: X 軸歸零 (向左移動，直到碰到左端電感式接近開關 X_LEFT) ---
                 if target_axes in ["ALL", "X"]:
                     self.motor_x.is_homed = False
-                    logger.info(">>> 執行 X 軸歸零 (往左端接近開關尋找原點)...")
+                    logger.info(">>> 執行 X 軸歸零 (向左移動，直到碰到左端電感式接近開關 X_LEFT)...")
                     x_cfg = self.cfg.motor_x
-                    dir_sign = 1 if x_cfg.home_direction > 0 else -1
 
-                    def x_sensor_hit():
+                    # 即時精準檢測左端電感接近開關 (X_LEFT)
+                    def is_x_left_hit() -> bool:
                         if self.is_simulation:
-                            return self.motor_x.position_mm >= (x_cfg.max_limit_mm - 2.0) if dir_sign > 0 else self.motor_x.position_mm <= 2.0
-                        return self.sensor_monitor.read_all().get("x_right" if dir_sign > 0 else "x_left", False)
+                            return self.motor_x.position_mm <= 2.0
+                        val = self.gpio.read_pin(self.cfg.sensors.x_left)
+                        return (val == 0) if self.cfg.sensors.active_low else (val == 1)
 
-                    if x_sensor_hit():
-                        self.motor_x.move_rel(-dir_sign * x_cfg.backoff_mm, speed_mm_s=x_cfg.creep_speed_mm_s, ignore_limits=True)
+                    # 若初始已在左端開關觸發狀態，先緩慢向右微退，直到脫離開關
+                    if is_x_left_hit():
+                        logger.info("X 軸初始已在左端開關上，先緩慢向右微退...")
+                        self.motor_x.move_rel(1 * x_cfg.backoff_mm, speed_mm_s=x_cfg.creep_speed_mm_s, ignore_limits=True)
                         time.sleep(0.05)
 
-                    max_travel = x_cfg.max_limit_mm - x_cfg.min_limit_mm + 20.0
-                    self.motor_x.move_rel(dir_sign * max_travel, speed_mm_s=x_cfg.homing_speed_mm_s, check_stop_condition=x_sensor_hit, ignore_limits=True)
+                    # 向左移動尋找開關，直到碰到開關停止
+                    max_travel = x_cfg.max_limit_mm - x_cfg.min_limit_mm + 50.0
+                    self.motor_x.move_rel(-1 * max_travel, speed_mm_s=x_cfg.homing_speed_mm_s, check_stop_condition=is_x_left_hit, ignore_limits=True)
                     if self.state == "ESTOP": return
 
-                    time.sleep(0.05)
-                    self.motor_x.move_rel(-dir_sign * x_cfg.backoff_mm, speed_mm_s=x_cfg.homing_speed_mm_s, ignore_limits=True)
-                    time.sleep(0.05)
-
-                    self.motor_x.move_rel(dir_sign * (x_cfg.backoff_mm + 2.0), speed_mm_s=x_cfg.creep_speed_mm_s, check_stop_condition=x_sensor_hit, ignore_limits=True)
-                    time.sleep(0.05)
-
+                    # 設定原點座標
                     self.motor_x.set_position_mm(x_cfg.home_offset_mm)
                     self.motor_x.is_homed = True
-                    logger.info(f"X 軸歸零完成！已校準座標為 {x_cfg.home_offset_mm:.2f}mm")
+                    logger.info(f"X 軸已觸碰左邊接近開關 (X_LEFT) 停止！歸零完成，已校準座標為 {x_cfg.home_offset_mm:.2f}mm")
 
                 logger.info("=== 全自動歸零作業圓滿完成！===")
             except Exception as e:
