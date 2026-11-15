@@ -197,7 +197,7 @@
 
               <!-- Z 軸開關 & 驅動 ALM -->
               <div class="sensor-compact-row">
-                <div class="sensor-compact-title">Z 軸開關 & 2HSS86H 閉環驅動器警報</div>
+                <div class="sensor-compact-title">Z 軸開關 & 閉環驅動器警報 (X: HBS57H / Z: HB808C)</div>
                 <div class="sensor-pill-list">
                   <div class="sensor-pill" :class="telemetry.sensors.z_up ? 'active' : 'inactive'"
                        @click="toggleSimSensor('z_up')" :title="telemetry.is_simulation ? '點擊模擬觸發' : ''"
@@ -412,10 +412,10 @@
               </div>
             </div>
 
-            <!-- 2HSS86H 閉環步進驅動器警報輸出 -->
+            <!-- HBS57H / HB808C 閉環步進驅動器警報輸出 -->
             <div class="sensor-row">
               <div>
-                <strong>2HSS86H 驅動器閉環警報 (ALM):</strong>
+                <strong>閉環驅動器警報 (X: HBS57H / Z: HB808C ALM):</strong>
                 <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">
                   脫步保護、電機堵轉、過流過壓硬體報警
                 </span>
@@ -423,11 +423,11 @@
               <div style="display: flex; gap: 8px;">
                 <span class="sensor-tag" :class="telemetry.sensors.x_alm ? 'sensor-triggered' : 'sensor-open'"
                       :style="telemetry.sensors.x_alm ? { background: '#ef4444', color: '#fff' } : {}">
-                  X 驅動器 ALM: {{ telemetry.sensors.x_alm ? '⚠️ 報警異常' : '✓ 正常' }}
+                  X 軸 HBS57H 驅動器 ALM: {{ telemetry.sensors.x_alm ? '⚠️ 報警異常' : '✓ 正常' }}
                 </span>
                 <span class="sensor-tag" :class="telemetry.sensors.z_alm ? 'sensor-triggered' : 'sensor-open'"
                       :style="telemetry.sensors.z_alm ? { background: '#ef4444', color: '#fff' } : {}">
-                  Z 驅動器 ALM: {{ telemetry.sensors.z_alm ? '⚠️ 報警異常' : '✓ 正常' }}
+                  Z 軸 HB808C 驅動器 ALM: {{ telemetry.sensors.z_alm ? '⚠️ 報警異常' : '✓ 正常' }}
                 </span>
               </div>
             </div>
@@ -462,7 +462,7 @@
           <!-- X 軸設定 -->
           <div class="card">
             <div class="card-header">
-              <span class="card-title">⚙️ X 軸馬達參數 (單顆 57BYG-112 + 2HSS86H)</span>
+              <span class="card-title">⚙️ X 軸馬達參數 (單顆 57BYG-112 + HBS57H 閉環驅動)</span>
             </div>
 
             <div class="form-group">
@@ -519,7 +519,7 @@
           <!-- Z 軸設定 -->
           <div class="card">
             <div class="card-header">
-              <span class="card-title">⚙️ Z 軸雙馬達同步參數 (雙 57BYG-112 + 2HSS86H)</span>
+              <span class="card-title">⚙️ Z 軸雙馬達同步參數 (雙 57BYG-112 + HB808C 閉環驅動)</span>
             </div>
 
             <div class="form-group">
@@ -640,7 +640,7 @@
             <div class="legend-item"><span class="legend-dot" style="background: #3b82f6;"></span> 🔵 步進馬達 (PUL / DIR / ENA)</div>
             <div class="legend-item"><span class="legend-dot" style="background: #10b981;"></span> 🟢 接近開關 (QN-1805-E1 * 13)</div>
             <div class="legend-item"><span class="legend-dot" style="background: #a855f7;"></span> 🟣 電磁鐵控制 (LSD-P25/20 * 4)</div>
-            <div class="legend-item"><span class="legend-dot" style="background: #ef4444;"></span> 🔴 閉環警報 (2HSS86H ALM)</div>
+            <div class="legend-item"><span class="legend-dot" style="background: #ef4444;"></span> 🔴 閉環警報 (HBS57H / HB808C ALM)</div>
             <div class="legend-item"><span class="legend-dot" style="background: #f59e0b;"></span> ⚡ 3.3V 電源</div>
             <div class="legend-item"><span class="legend-dot" style="background: #dc2626;"></span> ⚡ 5V 電源</div>
             <div class="legend-item"><span class="legend-dot" style="background: #4b5563;"></span> ⬛ 接地 (GND)</div>
@@ -911,8 +911,8 @@
             <tbody>
               <tr style="border-bottom: 1px solid #1a2233;">
                 <td style="padding: 8px;">步進伺服閉環驅動器</td>
-                <td style="padding: 8px;">2HSS86H</td>
-                <td style="padding: 8px;">2 台</td>
+                <td style="padding: 8px;">X軸: HBS57H / Z軸: HB808C</td>
+                <td style="padding: 8px;">各 1 台 (共 2 台)</td>
                 <td style="padding: 8px;">X軸: GPIO 18, 23, 24 / Z軸: GPIO 12, 8, 7</td>
               </tr>
               <tr style="border-bottom: 1px solid #1a2233;">

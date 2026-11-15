@@ -14,7 +14,7 @@ logger = logging.getLogger("Main")
 def main():
     logger.info("==========================================================")
     logger.info("  雙軸龍門機械手臂智能控制系統 (Raspberry Pi 4 專用)")
-    logger.info("  配備: 2HSS86H閉環驅動*2 / 57BYG步進*3 / QN-1805-E1*13 / LSD-P25/20*4")
+    logger.info("  配備: X軸 HBS57H / Z軸 HB808C 閉環驅動 / 57BYG步進*3 / QN-1805-E1*13 / LSD-P25/20*4")
     logger.info("==========================================================")
 
     # 讀取設定

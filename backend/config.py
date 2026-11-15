@@ -11,7 +11,7 @@ class MotorConfig(BaseModel):
     dir_pin: int
     ena_pin: int
     alm_pin: int = -1
-    steps_per_rev: int = 1600         # 2HSS86H 微步細分 (例如 1600 pulse/rev)
+    steps_per_rev: int = 1600         # 驅動器微步細分 (例如 1600 pulse/rev)
     pitch_mm_per_rev: float = 5.0     # 導程或每轉移動毫米 (如 5mm 滾珠螺桿 或 40mm 同步輪)
     max_speed_mm_s: float = 80.0      # 最高移動速度 (mm/s)
     homing_speed_mm_s: float = 20.0   # 快速歸零尋點速度 (mm/s)
@@ -20,7 +20,7 @@ class MotorConfig(BaseModel):
     min_limit_mm: float = 0.0         # 軟體行程下限 min_limit_mm (mm)
     max_limit_mm: float = 600.0       # 軟體行程上限 max_limit_mm (mm)
     dir_inverted: bool = False        # 方向反轉
-    ena_inverted: bool = False        # 致能信號反轉 (2HSS86H預設ENA未導通為馬達鎖定，導通為釋放)
+    ena_inverted: bool = False        # 致能信號反轉 (HBS57H / HB808C 預設 ENA 未導通為馬達鎖定，導通為釋放)
     home_direction: int = -1          # 歸零方向: -1 (往最小極限), 1 (往最大極限)
     home_offset_mm: float = 0.0       # 歸零後設定座標 (mm)
     backoff_mm: float = 5.0           # 第一次觸碰後的退回距離 (mm)
@@ -52,8 +52,8 @@ class SensorPinConfig(BaseModel):
     arm_8: int = 20     # Pin 38 (手臂末端測針/夾爪 8)
 
     # 警報引腳 (驅動器 ALM)
-    x_alm: int = 21     # Pin 40 (2HSS86H-X 警報)
-    z_alm: int = 25     # Pin 22 (2HSS86H-Z 警報)
+    x_alm: int = 21     # Pin 40 (HBS57H-X 警報)
+    z_alm: int = 25     # Pin 22 (HB808C-Z 警報)
 
     # 接近開關邏輯電平 (光耦隔離後: NPN NO 檢測到金屬時導通接地為 LOW，若為 False 則為 HIGH 有效)
     active_low: bool = False
@@ -76,7 +76,7 @@ class SystemConfig(BaseModel):
     
     # 馬達設定
     motor_x: MotorConfig = Field(default_factory=lambda: MotorConfig(
-        name="X軸馬達 (單顆 57BYG-112)",
+        name="X軸馬達 (HBS57H + 57BYG-112)",
         pul_pin=18,    # Pin 12 (硬體PWM相容)
         dir_pin=23,    # Pin 16
         ena_pin=24,    # Pin 18
@@ -95,7 +95,7 @@ class SystemConfig(BaseModel):
     ))
     
     motor_z: MotorConfig = Field(default_factory=lambda: MotorConfig(
-        name="Z軸雙馬達同步 (雙 57BYG-112)",
+        name="Z軸雙馬達同步 (HB808C + 雙 57BYG-112)",
         pul_pin=12,    # Pin 32 (硬體PWM相容)
         dir_pin=8,     # Pin 24
         ena_pin=7,     # Pin 26

@@ -11,7 +11,7 @@ logger = logging.getLogger("MotorAxis")
 
 class MotorAxis:
     """
-    閉環步進驅動器 (2HSS86H) 控制軸
+    閉環步進驅動器 (X: HBS57H / Z: HB808C) 控制軸
     支援梯形加減速規劃、位置追蹤、致能鎖定 (ENA)、即時中止 (E-Stop) 與軟體極限保護
     """
     def __init__(self, gpio: GPIOBase, config: MotorConfig, is_simulation: bool = False):
@@ -49,7 +49,7 @@ class MotorAxis:
         lock=True  -> 馬達通電鎖死 (具備保持扭矩，防止負載下墜或位移)
         lock=False -> 馬達離合釋放 (線圈無電流，可用手推動調試)
         
-        注意：標準 2HSS86H 步進伺服驅動器之 ENA 引腳：
+        注意：標準 HBS57H / HB808C 步進伺服驅動器之 ENA 引腳：
         預設懸空 (不通光耦) 即為致能運作狀態；光耦通電時為離合釋放。
         若配置了 ena_inverted 則按反相處理。
         """
@@ -116,7 +116,7 @@ class MotorAxis:
         if self.cfg.dir_inverted:
             dir_val = 1 - dir_val
         self.gpio.write_pin(self.cfg.dir_pin, dir_val)
-        time.sleep(0.0005) # 方向引腳建立時間 (2HSS86H 需求 > 5us)
+        time.sleep(0.0005) # 方向引腳建立時間 (HBS57H / HB808C 需求 > 5us)
 
         self.is_moving = True
         self.abort_requested = False
@@ -156,7 +156,7 @@ class MotorAxis:
                 completed = (step_count == total_steps)
             else:
                 # 真實樹梅派模式：逐步脈衝產生
-                # 2HSS86H 脈衝高低電平脈寬最小需求 > 2.5us
+                # HBS57H / HB808C 脈衝高低電平脈寬最小需求 > 2.5us
                 pul_pin = self.cfg.pul_pin
                 write_gpio = self.gpio.write_pin
 

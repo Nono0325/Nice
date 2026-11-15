@@ -72,10 +72,10 @@ class MotionEngine:
                     self.gpio.set_sim_input(self.cfg.sensors.z_down, sim_down)
                     self.gpio.set_sim_input(self.cfg.sensors.z_up, sim_up)
 
-                # 驅動器閉環報警檢測 (2HSS86H 脫步、過流報警)
+                # 驅動器閉環報警檢測 (X軸 HBS57H、Z軸 HB808C 脫步或過流報警)
                 if sensors.get("x_alm") or sensors.get("z_alm"):
                     if self.state not in ["ALARM", "ESTOP"]:
-                        logger.error("檢測到 2HSS86H 驅動器報警輸出 (ALM 觸發)！緊急煞車")
+                        logger.error("檢測到閉環驅動器報警輸出 (X軸 HBS57H 或 Z軸 HB808C ALM 觸發)！緊急煞車")
                         self.emergency_stop()
                         self.state = "ALARM"
 

@@ -71,7 +71,7 @@ class ElectromagnetController:
 
 class SensorMonitor:
     """
-    監控 13 顆 QN-1805-E1 方形接近開關 (經 817 光耦隔離) 及 2 組 2HSS86H 驅動器報警信號
+    監控 13 顆 QN-1805-E1 方形接近開關 (經 817 光耦隔離) 及 X軸 HBS57H / Z軸 HB808C 驅動器報警信號
     X軸 3顆 (Left, Mid, Right)
     Z軸 2顆 (Up, Down)
     手臂末端 8顆 (Arm 1 ~ Arm 8)
@@ -119,7 +119,7 @@ class SensorMonitor:
             results[name] = is_active
         results["raw_values"] = raw_values
             
-        # 驅動器警報讀取 (2HSS86H ALM 輸出通常故障時導通或斷開)
+        # 驅動器警報讀取 (HBS57H / HB808C ALM 輸出通常故障時導通或斷開)
         for name, pin in self.alarm_pins.items():
             if pin > 0:
                 val = self.gpio.read_pin(pin)
