@@ -104,7 +104,10 @@
                   </span>
                 </div>
                 <div class="axis-value">{{ telemetry.motor_x.position_mm.toFixed(2) }} <span class="axis-unit">mm</span></div>
-                <div class="axis-steps">脈衝計數: {{ telemetry.motor_x.position_steps }} steps</div>
+                <div class="axis-steps" style="display: flex; justify-content: space-between; font-size: 12px;">
+                  <span>脈衝: {{ telemetry.motor_x.position_steps }} steps</span>
+                  <span style="color: #38bdf8;">範圍: [{{ telemetry.motor_x.min_limit_mm }} ~ {{ telemetry.motor_x.max_limit_mm }} mm]</span>
+                </div>
                 <div class="axis-track">
                   <div class="axis-bar" :style="{ width: xProgressPercent + '%' }"></div>
                 </div>
@@ -125,7 +128,10 @@
                   </span>
                 </div>
                 <div class="axis-value">{{ telemetry.motor_z.position_mm.toFixed(2) }} <span class="axis-unit">mm</span></div>
-                <div class="axis-steps">脈衝計數: {{ telemetry.motor_z.position_steps }} steps</div>
+                <div class="axis-steps" style="display: flex; justify-content: space-between; font-size: 12px;">
+                  <span>脈衝: {{ telemetry.motor_z.position_steps }} steps</span>
+                  <span style="color: #38bdf8;">範圍: [{{ telemetry.motor_z.min_limit_mm }} ~ {{ telemetry.motor_z.max_limit_mm }} mm]</span>
+                </div>
                 <div class="axis-track">
                   <div class="axis-bar" :style="{ width: zProgressPercent + '%' }"></div>
                 </div>
@@ -483,11 +489,21 @@
               <label>加速度 (mm/s²)</label>
               <input type="number" step="10" v-model.number="configForm.motor_x.accel_mm_s2" class="form-control">
             </div>
-            <div class="form-group">
-              <label>軟體行程範圍 [最小, 最大] (mm)</label>
-              <div style="display: flex; gap: 10px;">
-                <input type="number" v-model.number="configForm.motor_x.min_limit_mm" class="form-control" placeholder="Min">
-                <input type="number" v-model.number="configForm.motor_x.max_limit_mm" class="form-control" placeholder="Max">
+            <!-- X 軸軟體行程範圍設定 -->
+            <div style="background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; padding: 12px; margin: 15px 0;">
+              <div style="font-weight: 700; font-size: 13.5px; margin-bottom: 8px; color: #38bdf8; display: flex; justify-content: space-between;">
+                <span>📏 X 軸軟體行程範圍限制 (Software Travel Limits)</span>
+                <span>當前設定: [{{ configForm.motor_x.min_limit_mm }} ~ {{ configForm.motor_x.max_limit_mm }} mm]</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="color: #cbd5e1; font-weight: 600;">行程下限 min_limit_mm (mm)</label>
+                  <input type="number" step="0.5" v-model.number="configForm.motor_x.min_limit_mm" class="form-control" placeholder="0.0">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="color: #cbd5e1; font-weight: 600;">行程上限 max_limit_mm (mm)</label>
+                  <input type="number" step="0.5" v-model.number="configForm.motor_x.max_limit_mm" class="form-control" placeholder="600.0">
+                </div>
               </div>
             </div>
             <div class="checkbox-row">
@@ -530,11 +546,21 @@
               <label>加速度 (mm/s²)</label>
               <input type="number" step="10" v-model.number="configForm.motor_z.accel_mm_s2" class="form-control">
             </div>
-            <div class="form-group">
-              <label>軟體行程範圍 [最小, 最大] (mm)</label>
-              <div style="display: flex; gap: 10px;">
-                <input type="number" v-model.number="configForm.motor_z.min_limit_mm" class="form-control" placeholder="Min">
-                <input type="number" v-model.number="configForm.motor_z.max_limit_mm" class="form-control" placeholder="Max">
+            <!-- Z 軸軟體行程範圍設定 -->
+            <div style="background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; padding: 12px; margin: 15px 0;">
+              <div style="font-weight: 700; font-size: 13.5px; margin-bottom: 8px; color: #38bdf8; display: flex; justify-content: space-between;">
+                <span>📏 Z 軸軟體行程範圍限制 (Software Travel Limits)</span>
+                <span>當前設定: [{{ configForm.motor_z.min_limit_mm }} ~ {{ configForm.motor_z.max_limit_mm }} mm]</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="color: #cbd5e1; font-weight: 600;">行程下限 min_limit_mm (mm)</label>
+                  <input type="number" step="0.5" v-model.number="configForm.motor_z.min_limit_mm" class="form-control" placeholder="0.0">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="color: #cbd5e1; font-weight: 600;">行程上限 max_limit_mm (mm)</label>
+                  <input type="number" step="0.5" v-model.number="configForm.motor_z.max_limit_mm" class="form-control" placeholder="300.0">
+                </div>
               </div>
             </div>
             <div class="checkbox-row">

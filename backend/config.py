@@ -17,8 +17,8 @@ class MotorConfig(BaseModel):
     homing_speed_mm_s: float = 20.0   # 快速歸零尋點速度 (mm/s)
     creep_speed_mm_s: float = 4.0     # 二次精確觸碰速度 (mm/s)
     accel_mm_s2: float = 300.0        # 加速度 (mm/s²)
-    min_limit_mm: float = 0.0         # 軟體行程下限 (mm)
-    max_limit_mm: float = 500.0       # 軟體行程上限 (mm)
+    min_limit_mm: float = 0.0         # 軟體行程下限 min_limit_mm (mm)
+    max_limit_mm: float = 600.0       # 軟體行程上限 max_limit_mm (mm)
     dir_inverted: bool = False        # 方向反轉
     ena_inverted: bool = False        # 致能信號反轉 (2HSS86H預設ENA未導通為馬達鎖定，導通為釋放)
     home_direction: int = -1          # 歸零方向: -1 (往最小極限), 1 (往最大極限)
