@@ -73,7 +73,7 @@ createApp({
 
     // 運動控制參數
     const jogDistance = ref(10.0); // 預設寸動 10mm
-    const jogSpeedMode = ref('normal'); // slow, normal, fast
+    const jogSpeed = ref(30.0);    // 預設寸動速度 30 mm/s
     const customTargetX = ref(0.0);
     const customTargetZ = ref(0.0);
 
@@ -120,23 +120,10 @@ createApp({
       };
     };
 
-    // 計算寸動速度
-    const getJogSpeed = (axis) => {
-      if (axis === 'X') {
-        if (jogSpeedMode.value === 'slow') return 15.0;
-        if (jogSpeedMode.value === 'normal') return 50.0;
-        return 100.0;
-      } else {
-        if (jogSpeedMode.value === 'slow') return 5.0;
-        if (jogSpeedMode.value === 'normal') return 20.0;
-        return 35.0;
-      }
-    };
-
     // --- API 呼叫 ---
     const sendJog = async (axis, dir) => {
       const dist = parseFloat(jogDistance.value);
-      const speed = getJogSpeed(axis);
+      const speed = Math.max(1.0, parseFloat(jogSpeed.value) || 20.0);
       try {
         const res = await fetch('/api/jog', {
           method: 'POST',
@@ -394,7 +381,7 @@ createApp({
       telemetry,
       wsConnected,
       jogDistance,
-      jogSpeedMode,
+      jogSpeed,
       customTargetX,
       customTargetZ,
       logs,
