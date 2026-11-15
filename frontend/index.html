@@ -546,11 +546,25 @@
               <label for="z_ena">致能信號反轉 (Invert ENA)</label>
             </div>
           </div>
+
+          <!-- 感測器極性設定 -->
+          <div class="card" v-if="configForm && configForm.sensors" style="grid-column: 1 / -1;">
+            <div class="card-header">
+              <span class="card-title">📡 電感式接近開關極性設定 (QN-1805-E1 共 13 顆)</span>
+            </div>
+            <div class="checkbox-row">
+              <input type="checkbox" id="sensors_active_low" v-model="configForm.sensors.active_low">
+              <label for="sensors_active_low" style="font-weight: bold; cursor: pointer;">低電平導通 (Active Low / 低電平為觸發，取消勾選則為高電平 Active High 觸發)</label>
+            </div>
+            <div style="font-size: 13px; color: var(--text-muted); margin-top: 6px; line-height: 1.5;">
+              💡 提示：若您的感測器在金屬靠近時 LED 亮起且引腳輸入 HIGH，請保持<b>取消勾選 (Active High)</b>；若光耦隔離後金屬靠近引腳拉低為 LOW，請<b>勾選 (Active Low)</b>。此設定會即時反轉所有接近開關的讀取狀態。
+            </div>
+          </div>
         </div>
 
         <div style="text-align: right; margin-top: 10px;">
           <button class="btn-primary" style="padding: 12px 30px; font-size: 15px;" @click="saveConfig">
-            💾 儲存並立即套用所有馬達設定
+            💾 儲存並立即套用所有參數設定
           </button>
         </div>
       </div>

@@ -181,7 +181,7 @@ def sim_toggle_sensor(req: SimSensorToggleRequest):
     sensors = config_mgr.config.sensors
     pin = getattr(sensors, req.sensor_name, None)
     if pin is not None:
-        val = 0 if req.active else 1 # active_low
+        val = (0 if req.active else 1) if sensors.active_low else (1 if req.active else 0)
         motion_engine.gpio.set_sim_input(pin, val)
         return {"status": "ok", "sensor": req.sensor_name, "active": req.active}
     return {"status": "error", "message": "找不到感測器引腳名稱"}

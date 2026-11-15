@@ -60,7 +60,7 @@
         "arm_8": 20,
         "x_alm": 21,
         "z_alm": 25,
-        "active_low": true
+        "active_low": false
     },
     "electromagnets": {
         "em1_pin": 4,

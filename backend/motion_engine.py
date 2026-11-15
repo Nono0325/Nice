@@ -56,17 +56,19 @@ class MotionEngine:
                 
                 # 若為模擬模式，根據虛擬座標自動模擬接近開關狀態
                 if self.is_simulation and isinstance(self.gpio, SimGPIO):
+                    active_val = 0 if self.cfg.sensors.active_low else 1
+                    inactive_val = 1 if self.cfg.sensors.active_low else 0
                     # X軸模擬開關觸發 (Left: <= 2mm, Mid: 290~310mm, Right: >= 598mm)
-                    sim_left = 0 if self.motor_x.position_mm <= 2.0 else 1
-                    sim_mid = 0 if (295.0 <= self.motor_x.position_mm <= 305.0) else 1
-                    sim_right = 0 if self.motor_x.position_mm >= (self.cfg.motor_x.max_limit_mm - 2.0) else 1
+                    sim_left = active_val if self.motor_x.position_mm <= 2.0 else inactive_val
+                    sim_mid = active_val if (295.0 <= self.motor_x.position_mm <= 305.0) else inactive_val
+                    sim_right = active_val if self.motor_x.position_mm >= (self.cfg.motor_x.max_limit_mm - 2.0) else inactive_val
                     self.gpio.set_sim_input(self.cfg.sensors.x_left, sim_left)
                     self.gpio.set_sim_input(self.cfg.sensors.x_mid, sim_mid)
                     self.gpio.set_sim_input(self.cfg.sensors.x_right, sim_right)
 
                     # Z軸模擬開關觸發 (Down: <= 2mm, Up: >= 298mm)
-                    sim_down = 0 if self.motor_z.position_mm <= 2.0 else 1
-                    sim_up = 0 if self.motor_z.position_mm >= (self.cfg.motor_z.max_limit_mm - 2.0) else 1
+                    sim_down = active_val if self.motor_z.position_mm <= 2.0 else inactive_val
+                    sim_up = active_val if self.motor_z.position_mm >= (self.cfg.motor_z.max_limit_mm - 2.0) else inactive_val
                     self.gpio.set_sim_input(self.cfg.sensors.z_down, sim_down)
                     self.gpio.set_sim_input(self.cfg.sensors.z_up, sim_up)
 
@@ -205,6 +207,7 @@ class MotionEngine:
 
                 # --- 步驟 1: Z 軸歸零 (安全起見，先上升 Z 軸至頂部接近開關 z_up) ---
                 if target_axes in ["ALL", "Z"]:
+                    self.motor_z.is_homed = False
                     logger.info(">>> 執行 Z 軸安全歸零 (往頂部接近開關尋找原點)...")
                     z_cfg = self.cfg.motor_z
                     dir_sign = 1 if z_cfg.home_direction > 0 else -1
@@ -217,21 +220,21 @@ class MotionEngine:
 
                     # 若一開始就壓在開關上，先緩慢退回
                     if z_sensor_hit():
-                        self.motor_z.move_rel(-dir_sign * z_cfg.backoff_mm, speed_mm_s=z_cfg.creep_speed_mm_s)
+                        self.motor_z.move_rel(-dir_sign * z_cfg.backoff_mm, speed_mm_s=z_cfg.creep_speed_mm_s, ignore_limits=True)
                         time.sleep(0.05)
 
                     # 快速向開關方向運動
                     max_travel = z_cfg.max_limit_mm - z_cfg.min_limit_mm + 20.0
-                    self.motor_z.move_rel(dir_sign * max_travel, speed_mm_s=z_cfg.homing_speed_mm_s, check_stop_condition=z_sensor_hit)
+                    self.motor_z.move_rel(dir_sign * max_travel, speed_mm_s=z_cfg.homing_speed_mm_s, check_stop_condition=z_sensor_hit, ignore_limits=True)
                     if self.state == "ESTOP": return
 
                     # 階段 1.2: 退出緩衝距
                     time.sleep(0.05)
-                    self.motor_z.move_rel(-dir_sign * z_cfg.backoff_mm, speed_mm_s=z_cfg.homing_speed_mm_s)
+                    self.motor_z.move_rel(-dir_sign * z_cfg.backoff_mm, speed_mm_s=z_cfg.homing_speed_mm_s, ignore_limits=True)
                     time.sleep(0.05)
 
                     # 階段 1.3: 慢速精準觸摸開關 (Creep)
-                    self.motor_z.move_rel(dir_sign * (z_cfg.backoff_mm + 2.0), speed_mm_s=z_cfg.creep_speed_mm_s, check_stop_condition=z_sensor_hit)
+                    self.motor_z.move_rel(dir_sign * (z_cfg.backoff_mm + 2.0), speed_mm_s=z_cfg.creep_speed_mm_s, check_stop_condition=z_sensor_hit, ignore_limits=True)
                     time.sleep(0.05)
 
                     # 設定原點座標
@@ -241,6 +244,7 @@ class MotionEngine:
 
                 # --- 步驟 2: X 軸歸零 (水平向左端開關 x_left 尋找原點) ---
                 if target_axes in ["ALL", "X"]:
+                    self.motor_x.is_homed = False
                     logger.info(">>> 執行 X 軸歸零 (往左端接近開關尋找原點)...")
                     x_cfg = self.cfg.motor_x
                     dir_sign = 1 if x_cfg.home_direction > 0 else -1
@@ -251,18 +255,18 @@ class MotionEngine:
                         return self.sensor_monitor.read_all().get("x_right" if dir_sign > 0 else "x_left", False)
 
                     if x_sensor_hit():
-                        self.motor_x.move_rel(-dir_sign * x_cfg.backoff_mm, speed_mm_s=x_cfg.creep_speed_mm_s)
+                        self.motor_x.move_rel(-dir_sign * x_cfg.backoff_mm, speed_mm_s=x_cfg.creep_speed_mm_s, ignore_limits=True)
                         time.sleep(0.05)
 
                     max_travel = x_cfg.max_limit_mm - x_cfg.min_limit_mm + 20.0
-                    self.motor_x.move_rel(dir_sign * max_travel, speed_mm_s=x_cfg.homing_speed_mm_s, check_stop_condition=x_sensor_hit)
+                    self.motor_x.move_rel(dir_sign * max_travel, speed_mm_s=x_cfg.homing_speed_mm_s, check_stop_condition=x_sensor_hit, ignore_limits=True)
                     if self.state == "ESTOP": return
 
                     time.sleep(0.05)
-                    self.motor_x.move_rel(-dir_sign * x_cfg.backoff_mm, speed_mm_s=x_cfg.homing_speed_mm_s)
+                    self.motor_x.move_rel(-dir_sign * x_cfg.backoff_mm, speed_mm_s=x_cfg.homing_speed_mm_s, ignore_limits=True)
                     time.sleep(0.05)
 
-                    self.motor_x.move_rel(dir_sign * (x_cfg.backoff_mm + 2.0), speed_mm_s=x_cfg.creep_speed_mm_s, check_stop_condition=x_sensor_hit)
+                    self.motor_x.move_rel(dir_sign * (x_cfg.backoff_mm + 2.0), speed_mm_s=x_cfg.creep_speed_mm_s, check_stop_condition=x_sensor_hit, ignore_limits=True)
                     time.sleep(0.05)
 
                     self.motor_x.set_position_mm(x_cfg.home_offset_mm)

@@ -68,15 +68,17 @@ class MotorAxis:
         logger.warning(f"[{self.cfg.name}] 收到運動中止信號！")
 
     def move_rel(self, delta_mm: float, speed_mm_s: Optional[float] = None, 
-                 check_stop_condition: Optional[Callable[[], bool]] = None) -> bool:
+                 check_stop_condition: Optional[Callable[[], bool]] = None,
+                 ignore_limits: bool = False) -> bool:
         """
         相對位移運動 (含加減速曲線與即時條件檢測)
         """
         target_mm = self.position_mm + delta_mm
-        return self.move_abs(target_mm, speed_mm_s, check_stop_condition)
+        return self.move_abs(target_mm, speed_mm_s, check_stop_condition, ignore_limits=ignore_limits)
 
     def move_abs(self, target_mm: float, speed_mm_s: Optional[float] = None, 
-                 check_stop_condition: Optional[Callable[[], bool]] = None) -> bool:
+                 check_stop_condition: Optional[Callable[[], bool]] = None,
+                 ignore_limits: bool = False) -> bool:
         """
         絕對座標運動
         """
@@ -88,8 +90,8 @@ class MotorAxis:
             logger.warning(f"[{self.cfg.name}] 馬達運動中，忽略新指令")
             return False
 
-        # 軟體行程限制保護 (已歸零狀態下強制校驗)
-        if self.is_homed:
+        # 軟體行程限制保護 (已歸零狀態下強制校驗，歸零尋點動作可略過)
+        if self.is_homed and not ignore_limits:
             if target_mm < self.cfg.min_limit_mm or target_mm > self.cfg.max_limit_mm:
                 logger.error(f"[{self.cfg.name}] 目標位置 {target_mm:.2f}mm 超出軟體行程保護範圍 [{self.cfg.min_limit_mm}, {self.cfg.max_limit_mm}]mm！")
                 return False

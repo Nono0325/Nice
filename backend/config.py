@@ -55,8 +55,8 @@ class SensorPinConfig(BaseModel):
     x_alm: int = 21     # Pin 40 (2HSS86H-X 警報)
     z_alm: int = 25     # Pin 22 (2HSS86H-Z 警報)
 
-    # 接近開關邏輯電平 (光耦隔離後: NPN NO 檢測到金屬時導通接地為 LOW)
-    active_low: bool = True
+    # 接近開關邏輯電平 (光耦隔離後: NPN NO 檢測到金屬時導通接地為 LOW，若為 False 則為 HIGH 有效)
+    active_low: bool = False
 
 class ElectromagnetConfig(BaseModel):
     # 4組 LSD-P25/20 電磁鐵輸出引腳

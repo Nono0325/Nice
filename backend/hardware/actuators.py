@@ -110,11 +110,14 @@ class SensorMonitor:
 
     def read_all(self) -> Dict[str, Any]:
         results = {}
-        # 接近開關讀取 (若 active_low=True，輸入為0代表金屬感應導通)
+        raw_values = {}
+        # 接近開關讀取 (若 active_low=True，輸入為0代表金屬感應導通；若 active_low=False，輸入為1代表金屬感應導通)
         for name, pin in self.sensor_pins.items():
             val = self.gpio.read_pin(pin)
+            raw_values[name] = val
             is_active = (val == 0) if self.cfg.active_low else (val == 1)
             results[name] = is_active
+        results["raw_values"] = raw_values
             
         # 驅動器警報讀取 (2HSS86H ALM 輸出通常故障時導通或斷開)
         for name, pin in self.alarm_pins.items():
